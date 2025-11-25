@@ -1,334 +1,252 @@
-#  Evently - Özel Etkinlik Pazar Yeri
+# MekanBudur - Etkinlik ve Hizmet Pazar Yeri
 
-Modern mikroservis mimarisi ile geliştirilmiş, harita entegrasyonlu etkinlik ve hizmet pazar yeri platformu. Kullanıcılar etkinlik ilanları oluşturabilir, hizmet sağlayıcılar (vendor) bu ilanlara teklif verebilir.
+Mikroservis mimarisi ve Flutter mobil uygulama ile gelistirilmis etkinlik pazar yeri platformu. Kullanicilar etkinlik ilanlari olusturabilir, tedarikciler (vendor) bu ilanlara teklif verebilir.
 
-## 📋 İçindekiler
+## Proje Hakkinda
 
-- [Özellikler](#-özellikler)
-- [Teknoloji Stack'i](#-teknoloji-stacki)
-- [Proje Yapısı](#-proje-yapısı)
-- [Kurulum](#-kurulum)
-- [Kullanım](#-kullanım)
-- [API Dokümantasyonu](#-api-dokümantasyonu)
-- [Veritabanı Yapısı](#-veritabanı-yapısı)
-- [Docker Yapılandırması](#-docker-yapılandırması)
-- [Geliştirme Notları](#-geliştirme-notları)
+MekanBudur, etkinlik sahipleri ile hizmet saglayicilari bir araya getiren bir pazar yeri uygulamasidir. Platform iki ana kullanici rolune sahiptir:
 
-## ✨ Özellikler
+- **Kullanici (User):** Etkinlik ilanlari olusturur, gelen teklifleri degerlendirir ve kabul eder.
+- **Tedarikci (Vendor):** Acik ilanlari inceler ve hizmet verebilecegi ilanlara teklif gonderir.
 
-### 🔐 Kimlik Doğrulama
-- JWT tabanlı kimlik doğrulama
-- Kullanıcı (User) ve Hizmet Sağlayıcı (Vendor) rolleri
-- Güvenli şifre hash'leme (ASP.NET Core Identity)
-
-### 📝 İlan Yönetimi
-- Etkinlik ilanları oluşturma ve yönetme
-- Kategori bazlı filtreleme
-- Bütçe ve konum bazlı arama
-- İlan detay sayfaları
-
-### 🗺️ Harita Entegrasyonu
-- İlan oluştururken haritadan konum seçimi
-- Vendor kayıt sırasında mekân konumu belirleme
-- Latitude/Longitude ve radius desteği
-- Adres etiketi kaydetme
-
-### 💰 Teklif Sistemi
-- Vendor'ların ilanlara teklif vermesi
-- İlan sahibinin teklifleri görüntülemesi
-- Teklif kabul/red işlemleri
-- Teklif durumu takibi
-
-### 🏢 Mikroservis Mimarisi
-- Ana API servisi (ilan, kullanıcı, teklif yönetimi)
-- Geo servisi (konum verileri yönetimi)
-- Web frontend (Razor Pages)
-- Servisler arası HTTP iletişim
-
-## 🛠️ Teknoloji Stack'i
+## Teknolojiler
 
 ### Backend
-- **.NET 8.0** - Modern C# framework
-- **Entity Framework Core 8.0** - ORM (Code First yaklaşımı)
-- **PostgreSQL 16** - İlişkisel veritabanı
-- **JWT Bearer Authentication** - Token tabanlı kimlik doğrulama
-- **ASP.NET Core Minimal APIs** - RESTful API endpoints
+- .NET 8.0 (Minimal API)
+- Entity Framework Core 8.0 (Code First)
+- PostgreSQL 16
+- JWT Authentication
 
-### Frontend
-- **ASP.NET Core Razor Pages** - Server-side rendering
-- **JavaScript** - İstemci tarafı etkileşimler
+### Mobil Uygulama
+- Flutter 3.x
+- Provider (State Management)
+- Dio (HTTP Client)
+- GoRouter (Navigation)
+- flutter_map + latlong2 (Harita)
 
-### DevOps & Infrastructure
-- **Docker & Docker Compose** - Containerization
-- **pgAdmin 4** - Veritabanı yönetim arayüzü
-- **Swagger/OpenAPI** - API dokümantasyonu
+### Altyapi
+- Docker ve Docker Compose
+- pgAdmin 4
 
-## 📁 Proje Yapısı
+## Proje Yapisi
 
 ```
-evently-docker-dotnet/
-├── src/
-│   ├── Api/                    # Ana API servisi
-│   │   ├── Data/              # DbContext ve veritabanı yapılandırması
-│   │   ├── Models/            # Entity modelleri (User, EventListing, Bid, vb.)
-│   │   ├── DTOs/              # Data Transfer Objects
-│   │   ├── Services/          # İş mantığı servisleri
-│   │   └── Program.cs         # API endpoint'leri ve yapılandırma
-│   │
-│   ├── Geo/                   # Geo servisi (konum yönetimi)
-│   │   ├── Data/              # GeoDbContext
-│   │   ├── Models/            # Place modeli
-│   │   └── Program.cs         # Geo API endpoint'leri
-│   │
-│   └── Web/                   # Frontend (Razor Pages)
-│       ├── Pages/             # Razor sayfaları
-│       └── wwwroot/           # Statik dosyalar (CSS, JS)
-│
-├── docker-compose.yml         # Docker servis yapılandırması
-└── README.md                  # Bu dosya
+mekanbudur/
+|
+|-- src/
+|   |-- Api/                          # Ana API servisi (.NET 8)
+|   |   |-- Data/
+|   |   |   |-- AppDbContext.cs       # Entity Framework DbContext
+|   |   |-- DTOs/
+|   |   |   |-- AuthDtos.cs           # Kimlik dogrulama DTO'lari
+|   |   |   |-- BidDtos.cs            # Teklif DTO'lari
+|   |   |   |-- ListingDtos.cs        # Ilan DTO'lari
+|   |   |   |-- VendorDtos.cs         # Tedarikci DTO'lari
+|   |   |-- Models/
+|   |   |   |-- User.cs               # Kullanici modeli
+|   |   |   |-- EventListing.cs       # Ilan modeli
+|   |   |   |-- Bid.cs                # Teklif modeli
+|   |   |   |-- VendorProfile.cs      # Tedarikci profili
+|   |   |   |-- ServiceCategory.cs    # Hizmet kategorisi
+|   |   |-- Services/
+|   |   |   |-- JwtTokenService.cs    # JWT token uretimi
+|   |   |   |-- GeoClient.cs          # Geo servisi istemcisi
+|   |   |-- Program.cs                # API endpoint tanimlari
+|   |   |-- Dockerfile
+|   |
+|   |-- Geo/                          # Konum servisi (.NET 8)
+|   |   |-- Data/
+|   |   |   |-- GeoDbContext.cs
+|   |   |-- Models/
+|   |   |   |-- Place.cs              # Konum modeli
+|   |   |-- Program.cs                # Geo API endpoint'leri
+|   |   |-- Dockerfile
+|   |
+|   |-- mobile/                       # Flutter mobil uygulama
+|       |-- lib/
+|       |   |-- core/
+|       |   |   |-- api_client.dart   # Dio HTTP istemcisi
+|       |   |   |-- router.dart       # GoRouter yapilandirmasi
+|       |   |-- data/
+|       |   |   |-- models/           # Veri modelleri
+|       |   |   |-- services/         # API servisleri
+|       |   |-- presentation/
+|       |   |   |-- providers/        # State yonetimi
+|       |   |   |-- screens/          # Ekranlar
+|       |   |       |-- auth/         # Giris/Kayit ekranlari
+|       |   |       |-- listing/      # Ilan ekranlari
+|       |   |       |-- vendor/       # Tedarikci ekranlari
+|       |   |-- main.dart
+|       |-- pubspec.yaml
+|
+|-- docker-compose.yml                # Docker servis tanimlari
+|-- README.md
 ```
 
-## 🚀 Kurulum
+## Kurulum
 
 ### Gereksinimler
 
-- [Docker](https://www.docker.com/get-started) (v20.10+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
-- .NET 8.0 SDK (geliştirme için, opsiyonel)
+- Docker ve Docker Compose
+- Flutter SDK 3.x (mobil uygulama icin)
+- Android Studio veya VS Code
 
-### Hızlı Başlangıç
+### Backend Servisleri
 
-1. **Projeyi klonlayın:**
-   ```bash
-   git clone <repository-url>
-   cd evently-docker-dotnet
-   ```
-
-2. **Docker Compose ile tüm servisleri başlatın:**
-   ```bash
-   docker compose up --build
-   ```
-
-3. **Servislerin hazır olmasını bekleyin** (ilk başlatmada 1-2 dakika sürebilir)
-
-4. **Erişim URL'leri:**
-   - 🌐 **Web Frontend**: http://localhost:8080
-   - 📡 **API (Swagger)**: http://localhost:8081/swagger
-   - 🗺️ **Geo API (Swagger)**: http://localhost:8082/swagger
-   - 🗄️ **pgAdmin**: http://localhost:5050
-
-### Servisleri Durdurma
-
+1. Projeyi klonlayin:
 ```bash
-docker compose down
+git clone https://github.com/hsyntinaztepe/mekanbudur-event-venue-finder.git.mobile.git
+cd mekanbudur-event-venue-finder.git.mobile
 ```
 
-Verileri de silmek için:
+2. Docker ile servisleri baslatin:
 ```bash
-docker compose down -v
+docker compose up --build
 ```
 
-## 💻 Kullanım
+3. Servislerin hazir olmasini bekleyin (ilk baslatmada 1-2 dakika surebilir).
 
-### Demo Hesaplar
+### Mobil Uygulama
 
-Proje ilk başlatıldığında otomatik olarak demo hesaplar oluşturulur:
+1. Flutter bagimliliklerini yukleyin:
+```bash
+cd src/mobile
+flutter pub get
+```
 
-- **Kullanıcı (User)**
-  - Email: `user@demo.com`
-  - Şifre: `Pass123*`
+2. Uygulamayi calistirin:
+```bash
+flutter run
+```
 
-- **Hizmet Sağlayıcı (Vendor)**
-  - Email: `vendor@demo.com`
-  - Şifre: `Pass123*`
+Not: Android emulatorunde API'ye baglanmak icin `api_client.dart` dosyasindaki base URL `http://10.0.2.2:8081/api` olarak ayarlidir.
 
-### pgAdmin Kullanımı
+## Servis Adresleri
 
-pgAdmin'e http://localhost:5050 adresinden erişebilirsiniz.
+| Servis | Adres | Aciklama |
+|--------|-------|----------|
+| API | http://localhost:8081 | Ana API servisi |
+| API Swagger | http://localhost:8081/swagger | API dokumantasyonu |
+| Geo API | http://localhost:8082 | Konum servisi |
+| pgAdmin | http://localhost:5050 | Veritabani yonetimi |
+| PostgreSQL (Ana) | localhost:5432 | Ana veritabani |
+| PostgreSQL (Geo) | localhost:5433 | Geo veritabani |
 
-**Giriş Bilgileri:**
-- Email: `admin@mekanbudur.com`
-- Password: `admin`
+## Demo Hesaplar
 
-**Önemli:** pgAdmin'in tam başlaması 30-60 saniye sürebilir.
+Proje ilk baslatildiginda otomatik olarak demo hesaplar olusturulur:
 
-#### Veritabanı Bağlantısı Ekleme
+| Rol | E-posta | Sifre |
+|-----|---------|-------|
+| Kullanici | user@demo.com | Pass123* |
+| Tedarikci | vendor@demo.com | Pass123* |
 
-1. Sol panelde **"Servers"** üzerine sağ tıklayın → **"Register" → "Server..."**
+## API Endpoint'leri
 
-2. **Ana Veritabanı (evently):**
-   - **General** → Name: `MekanBudur DB`
-   - **Connection** → 
-     - Host: `db` (Docker içinden) veya `host.docker.internal` (host makineden)
-     - Port: `5432`
-     - Database: `evently`
-     - Username: `postgres`
-     - Password: `postgres`
+### Kimlik Dogrulama
+- `POST /api/auth/register` - Yeni kullanici kaydi
+- `POST /api/auth/login` - Kullanici girisi
 
-3. **Geo Veritabanı (evently_geo):**
-   - **General** → Name: `MekanBudur Geo DB`
-   - **Connection** →
-     - Host: `geodb` (Docker içinden) veya `host.docker.internal` (host makineden)
-     - Port: `5432`
-     - Database: `evently_geo`
-     - Username: `postgres`
-     - Password: `postgres`
+### Kategoriler
+- `GET /api/categories` - Hizmet kategorilerini listele
 
-## 📚 API Dokümantasyonu
+### Ilanlar
+- `GET /api/listings` - Tum ilanlari listele
+- `GET /api/listings/{id}` - Ilan detayi
+- `GET /api/listings/mine` - Kullanicinin kendi ilanlari (Auth: User)
+- `POST /api/listings` - Yeni ilan olustur (Auth: User)
+- `PATCH /api/listings/{id}/visibility` - Ilan gorunurlugunu guncelle
 
-### Ana API Endpoints
-
-#### Kimlik Doğrulama
-- `POST /api/auth/register` - Yeni kullanıcı kaydı
-- `POST /api/auth/login` - Kullanıcı girişi
-
-#### Kategoriler
-- `GET /api/categories` - Tüm kategorileri listele
-
-#### İlanlar
-- `GET /api/listings` - İlanları listele (filtreli)
-  - Query params: `categoryId`, `q`, `location`, `minBudget`, `maxBudget`
-- `GET /api/listings/{id}` - İlan detayı
-- `GET /api/listings/mine` - Kendi ilanlarım (Auth: User)
-- `POST /api/listings` - Yeni ilan oluştur (Auth: User)
-
-#### Teklifler
+### Teklifler
 - `POST /api/bids` - Teklif ver (Auth: Vendor)
-- `GET /api/bids/mine` - Tekliflerim (Auth: Vendor)
-- `GET /api/listings/{id}/bids` - İlan teklifleri (Auth: İlan sahibi)
+- `GET /api/bids/mine` - Tedarikci teklifleri (Auth: Vendor)
+- `GET /api/listings/{id}/bids` - Ilana gelen teklifler (Auth: Ilan sahibi)
 - `POST /api/bids/{id}/accept` - Teklif kabul et (Auth: User)
 
-#### Geo Proxy
-- `GET /api/geo/listings/{id}` - İlan konum bilgisi
-- `GET /api/geo/vendors/{userId}` - Vendor mekân konumu
+### Konum (Geo)
+- `POST /api/places/upsert` - Konum ekle/guncelle
+- `GET /api/places/by-ref` - Referansa gore konum getir
 
-### Geo API Endpoints
+## Veritabani Yapisi
 
-- `POST /api/places/upsert` - Konum ekle/güncelle
-- `GET /api/places/by-ref` - Referans tip ve ID'ye göre konum getir
-  - Query params: `refType` (Listing/Vendor), `refId`
+### Ana Veritabani (evently)
 
-**Detaylı API dokümantasyonu için:** http://localhost:8081/swagger
+**Users**
+- Id, Email, PasswordHash, DisplayName, Role (User/Vendor)
 
-## 🗄️ Veritabanı Yapısı
+**VendorProfiles**
+- Id, UserId, CompanyName, ServiceCategoriesCsv
 
-### Ana Veritabanı (evently)
+**ServiceCategories**
+- Id, Name
 
-#### Tablolar
-- **Users** - Kullanıcı bilgileri (User/Vendor rolleri)
-- **VendorProfiles** - Vendor profil bilgileri
-- **ServiceCategories** - Hizmet kategorileri (Venue, Bakery, Photographer, vb.)
-- **EventListings** - Etkinlik ilanları
-- **Bids** - Teklifler
+**EventListings**
+- Id, Title, Description, EventDate, Location, Status, Visibility, CreatedByUserId
 
-#### İlişkiler
-- User ↔ EventListing (1:N)
-- User ↔ VendorProfile (1:1)
-- EventListing ↔ Bid (1:N)
-- EventListing ↔ ServiceCategory (N:1)
+**EventListingItems**
+- Id, EventListingId, ServiceCategoryId, Budget, Status
 
-### Geo Veritabanı (evently_geo)
+**Bids**
+- Id, EventListingId, VendorId, TotalAmount, Message, Status
 
-#### Tablolar
-- **Places** - Konum bilgileri
-  - `RefType`: "Listing" veya "Vendor"
-  - `RefId`: İlgili entity'nin ID'si
-  - `Latitude`, `Longitude`: Koordinatlar
-  - `Radius`: Yarıçap (metre)
-  - `AddressLabel`: Adres etiketi
+**BidItems**
+- Id, BidId, EventListingItemId, Amount
 
-### Veritabanı Bağlantı Bilgileri
+### Geo Veritabani (evently_geo)
 
-**Ana DB:**
-- Host: `localhost:5432`
-- Database: `evently`
-- User: `postgres`
-- Password: `postgres`
+**Places**
+- Id, RefType (Listing/Vendor), RefId, Latitude, Longitude, Radius, AddressLabel
 
-**Geo DB:**
-- Host: `localhost:5433`
-- Database: `evently_geo`
-- User: `postgres`
-- Password: `postgres`
+## Ozellikler
 
-## 🐳 Docker Yapılandırması
+### Kullanici Ozellikleri
+- Kayit olma ve giris yapma
+- Etkinlik ilani olusturma (harita uzerinden konum secimi)
+- Ilan gorunurluk yonetimi (yayinla/gizle/kaldir)
+- Gelen teklifleri inceleme ve kabul etme
 
-### Servisler
+### Tedarikci Ozellikleri
+- Tedarikci olarak kayit olma
+- Acik ilanlari goruntuleme (Pazar Alani)
+- Ilanlara teklif verme
+- Kendi tekliflerini takip etme
+- Profil yonetimi
 
-| Servis | Port | Açıklama |
-|--------|------|----------|
-| `web` | 8080 | Frontend (Razor Pages) |
-| `api` | 8081 | Ana API servisi |
-| `geo` | 8082 | Geo servisi |
-| `db` | 5432 | PostgreSQL (Ana DB) |
-| `geodb` | 5433 | PostgreSQL (Geo DB) |
-| `pgadmin` | 5050 | pgAdmin web arayüzü |
+### Harita Entegrasyonu
+- Ilan olustururken haritadan konum secimi
+- Kapsam yaricapi belirleme
+- Ilan detaylarinda harita gorunumu
 
-### Volume'lar
+## Gelistirme
 
-- `db_data` - Ana veritabanı verileri
-- `geodb_data` - Geo veritabanı verileri
-- `pgadmin_data` - pgAdmin yapılandırması
+### Kod Yapilandirmasi
 
-### Health Checks
+Backend servisleri .NET 8 Minimal API kullanir. Tum endpoint'ler `Program.cs` dosyalarinda tanimlidir.
 
-Tüm servisler health check ile izlenir. Servisler sağlıklı olduğunda bağımlı servisler başlatılır.
+Flutter uygulamasi Provider pattern ile state yonetimi yapar. Ekranlar `presentation/screens` altinda, API servisleri `data/services` altindadir.
 
-## 🔧 Geliştirme Notları
+### Veritabani
 
-### Code First Yaklaşımı
+Entity Framework Core Code First yaklasimi kullanilir. Ilk calistirmada `EnsureCreated()` ile sema olusturulur.
 
-Proje **Entity Framework Core Code First** yaklaşımı kullanmaktadır:
+### Docker
 
-- Model sınıfları `Models/` klasöründe tanımlı
-- DbContext'ler `Data/` klasöründe
-- İlişkiler `OnModelCreating` metodunda yapılandırılmış
-- Şema oluşturma: `EnsureCreated()` (demo için)
+Tum servisler Docker container'larinda calisir. `docker-compose.yml` dosyasi servis bagimliliklerini ve health check'leri tanimlar.
 
-**⚠️ Önemli:** Üretim ortamında `EnsureCreated()` yerine **EF Core Migrations** kullanılmalıdır.
+## pgAdmin Kullanimi
 
-### Environment Variables
+pgAdmin'e http://localhost:5050 adresinden erisin.
 
-Docker Compose içinde environment variable'lar ile yapılandırma yapılır:
+Giris bilgileri:
+- E-posta: admin@mekanbudur.com
+- Sifre: admin
 
-```yaml
-ConnectionStrings__Default=Host=db;Port=5432;Database=evently;...
-Jwt__Key=supersecret_dev_jwt_key_change_me
-GeoService__BaseUrl=http://geo:8080
-```
+Veritabani baglantisi icin:
+- Host: db (ana) veya geodb (geo)
+- Port: 5432
+- Kullanici: postgres
+- Sifre: postgres
 
-### Seed Data
+## Lisans
 
-İlk başlatmada otomatik olarak:
-- Demo kullanıcılar oluşturulur
-- Hizmet kategorileri eklenir
-- Örnek ilanlar oluşturulur
-
-### CORS Yapılandırması
-
-Geo servisi tüm origin'lere açık (`*`). Üretimde spesifik origin'ler belirtilmelidir.
-
-### JWT Token
-
-- Development için basit bir key kullanılmaktadır
-- Üretimde güçlü, güvenli bir key kullanılmalıdır
-
-## 📝 Lisans
-
-Bu proje eğitim/demo amaçlı geliştirilmiştir.
-
-## 🤝 Katkıda Bulunma
-
-1. Fork edin
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit edin (`git commit -m 'Add amazing feature'`)
-4. Push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
-
-## 📧 İletişim
-
-Sorularınız için issue açabilirsiniz.
-
----
-
-⭐ Bu projeyi beğendiyseniz yıldız vermeyi unutmayın!
+Bu proje egitim amacli gelistirilmistir.

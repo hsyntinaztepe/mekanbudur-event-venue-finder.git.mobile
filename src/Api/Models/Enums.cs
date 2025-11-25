@@ -13,6 +13,13 @@ namespace MekanBudur.Api.Models
         Closed = 2
     }
 
+    public enum ListingVisibility
+    {
+        Passive = 0,    // Pasif - kullanıcı gizledi
+        Active = 1,     // Aktif - yayında
+        Deleted = 2     // Silindi - soft delete
+    }
+
     public enum BidStatus
     {
         Pending = 0,
