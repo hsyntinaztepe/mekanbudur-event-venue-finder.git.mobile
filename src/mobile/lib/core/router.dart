@@ -11,6 +11,7 @@ import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/listing/create_listing_screen.dart';
 import '../presentation/screens/listing/listing_details_screen.dart';
 import '../presentation/screens/listing/my_listings_screen.dart';
+import '../presentation/screens/listing/saved_places_screen.dart';
 import '../presentation/screens/vendor/bid_screen.dart';
 import '../presentation/screens/vendor/my_bids_screen.dart';
 import '../presentation/screens/vendor/vendor_feed_screen.dart';
@@ -27,9 +28,21 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _role;
   String? _displayName;
   String? _token;
+  String? _email;
   bool _sessionLoaded = false;
 
   bool get _isAuthenticated => (_token ?? '').isNotEmpty;
+
+  String? get _favoriteOwnerKey {
+    if (!_isAuthenticated) return null;
+    if (_email != null && _email!.trim().isNotEmpty) {
+      return _email;
+    }
+    if (_displayName != null && _displayName!.trim().isNotEmpty) {
+      return _displayName;
+    }
+    return _token;
+  }
 
   @override
   void initState() {
@@ -52,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final token = prefs.getString('token');
     final role = prefs.getString('role');
     final displayName = prefs.getString('displayName');
+    final email = prefs.getString('email');
 
     if (!mounted) {
       return;
@@ -61,11 +75,48 @@ class _HomeScreenState extends State<HomeScreen> {
       _token = token;
       _role = role;
       _displayName = displayName;
+      _email = email;
     });
+
+    await context
+        .read<ListingProvider>()
+        .loadFavorites(ownerIdentifier: _favoriteOwnerKey);
   }
 
   Future<void> _refreshListings() async {
     await context.read<ListingProvider>().fetchAllListings();
+  }
+
+  Future<void> _handleFavoriteTap(Listing listing) async {
+    final ownerKey = _favoriteOwnerKey;
+    if (ownerKey == null || ownerKey.isEmpty) {
+      _showLoginRequiredMessage();
+      return;
+    }
+
+    final added = await context
+        .read<ListingProvider>()
+        .toggleFavorite(listingId: listing.id, ownerIdentifier: ownerKey);
+
+    if (!mounted) return;
+
+    final message =
+        added ? 'İlan favorilere eklendi' : 'İlan favorilerden kaldırıldı';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _showLoginRequiredMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Favorilere eklemek için giriş yapmalısınız.'),
+      ),
+    );
   }
 
   @override
@@ -182,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return provider.allListings
-        .map((listing) => _buildListingCard(listing, theme, context))
+        .map((listing) => _buildListingCard(listing, theme, context, provider))
         .toList();
   }
 
@@ -260,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final location = GoRouterState.of(context).uri.toString();
     final bool isHome = location == '/';
     final bool isMarket = location.startsWith('/vendor-feed');
+    final bool isPlaces = location.startsWith('/saved-places');
     final bool isProfile = location.startsWith('/vendor-profile') ||
         location.startsWith('/my-listings') ||
         location.startsWith('/login');
@@ -362,6 +414,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => navigate('/vendor-feed', requireAuth: true),
               ),
               buildNavItem(
+                label: 'Mekanlar',
+                icon: Icons.location_city_outlined,
+                activeIcon: Icons.location_city_rounded,
+                isActive: isPlaces,
+                onTap: () => navigate('/saved-places', requireAuth: true),
+              ),
+              buildNavItem(
                 label: 'Profil',
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
@@ -382,12 +441,15 @@ class _HomeScreenState extends State<HomeScreen> {
     Listing listing,
     ThemeData theme,
     BuildContext context,
+    ListingProvider provider,
   ) {
     final dateFormatter = DateFormat('dd MMM yyyy');
     final currencyFormatter =
         NumberFormat.currency(symbol: 'TRY', decimalDigits: 0);
     final dateLabel = dateFormatter.format(listing.eventDate);
     final budgetLabel = currencyFormatter.format(listing.totalBudget);
+    final isFavorite = provider.isFavorite(listing.id);
+    final canFavorite = _isAuthenticated && _favoriteOwnerKey != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -430,6 +492,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: canFavorite
+                      ? (isFavorite ? 'Favorilerden kaldır' : 'Favorilere ekle')
+                      : 'Giriş yapmanız gerekiyor',
+                  onPressed: () {
+                    if (canFavorite) {
+                      _handleFavoriteTap(listing);
+                    } else {
+                      _showLoginRequiredMessage();
+                    }
+                  },
+                  icon: Icon(
+                    isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: isFavorite ? Colors.pinkAccent : Colors.white70,
                   ),
                 ),
               ],
@@ -643,6 +723,18 @@ final router = GoRouter(
     GoRoute(
       path: '/create-listing',
       builder: (context, state) => const CreateListingScreen(),
+    ),
+    GoRoute(
+      path: '/saved-places',
+      builder: (context, state) => const SavedPlacesScreen(),
+    ),
+    GoRoute(
+      path: '/places',
+      redirect: (context, state) => '/saved-places',
+    ),
+    GoRoute(
+      path: '/place',
+      redirect: (context, state) => '/saved-places',
     ),
     GoRoute(
       path: '/vendor-feed',

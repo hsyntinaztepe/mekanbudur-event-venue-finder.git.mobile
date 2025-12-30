@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/api_client.dart';
+import 'core/geo_api_client.dart';
 import 'core/router.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/listing_service.dart';
 import 'data/services/bid_service.dart';
 import 'data/services/vendor_service.dart';
+import 'data/services/place_service.dart';
+import 'data/services/google_places_service.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/listing_provider.dart';
 import 'presentation/providers/bid_provider.dart';
 import 'presentation/providers/vendor_provider.dart';
+import 'presentation/providers/place_provider.dart';
+import 'presentation/providers/google_places_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,6 +31,9 @@ class MyApp extends StatelessWidget {
     final listingService = ListingService(apiClient);
     final bidService = BidService(apiClient);
     final vendorService = VendorService(apiClient);
+    final geoApiClient = GeoApiClient();
+    final placeService = PlaceService(geoApiClient);
+    final googlePlacesService = GooglePlacesService(geoApiClient);
 
     return MultiProvider(
       providers: [
@@ -33,6 +41,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ListingProvider(listingService)),
         ChangeNotifierProvider(create: (_) => BidProvider(bidService)),
         ChangeNotifierProvider(create: (_) => VendorProvider(vendorService)),
+        ChangeNotifierProvider(create: (_) => PlaceProvider(placeService)),
+        ChangeNotifierProvider(
+          create: (_) => GooglePlacesProvider(googlePlacesService),
+        ),
       ],
       child: MaterialApp.router(
         title: 'MekanBudur',

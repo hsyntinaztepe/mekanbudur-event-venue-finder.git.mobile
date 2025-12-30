@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/listing_provider.dart';
+import '../../../data/models/turkiye_location_model.dart';
+import '../../../data/services/turkiye_location_service.dart';
 
 class CreateListingScreen extends StatefulWidget {
   const CreateListingScreen({super.key});
@@ -18,11 +21,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _locationController = TextEditingController();
   DateTime? _selectedDate;
   LatLng? _selectedPoint;
   double _selectedRadius = 1000;
   String? _addressLabel;
+
+  static final RegExp _descriptionCharPattern = RegExp(
+    r'''[0-9A-Za-zğüşöçıİĞÜŞÖÇ.,;:!?()"'\-\s]''',
+  );
+  static final TextInputFormatter _turkishFriendlyFormatter =
+      FilteringTextInputFormatter.allow(_descriptionCharPattern);
 
   static const LatLng _defaultMapCenter = LatLng(41.015137, 28.97953);
 
@@ -39,7 +47,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _locationController.dispose();
     super.dispose();
   }
 
@@ -56,10 +63,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         child: _LocationPickerSheet(
           initialPoint: _selectedPoint ?? _defaultMapCenter,
           initialRadius: _selectedRadius,
-          initialLabel: _addressLabel ??
-              (_locationController.text.isNotEmpty
-                  ? _locationController.text
-                  : null),
+          initialLabel: _addressLabel,
         ),
       ),
     );
@@ -70,13 +74,32 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         _selectedRadius = result.radius;
         final label = result.label?.trim();
         _addressLabel = (label?.isNotEmpty ?? false) ? label : null;
-        if (_addressLabel != null && _addressLabel!.isNotEmpty) {
-          _locationController.text = _addressLabel!;
-        } else {
-          _locationController.text = _formatLatLng(result.point);
-        }
       });
     }
+  }
+
+  int _countWords(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return 0;
+    return text
+        .split(RegExp(r'\s+'))
+        .where((word) => word.trim().isNotEmpty)
+        .length;
+  }
+
+  String? _validateDescription(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Açıklama zorunludur';
+    }
+    final wordCount = _countWords(text);
+    if (wordCount < 20) {
+      return 'Açıklama en az 20 kelime olmalı (şu an $wordCount)';
+    }
+    if (wordCount > 400) {
+      return 'Açıklama en fazla 400 kelime olabilir (şu an $wordCount)';
+    }
+    return null;
   }
 
   void _addItem() {
@@ -110,14 +133,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         return;
       }
 
-      final locationText = _locationController.text.trim();
-      final label = (_addressLabel?.trim().isNotEmpty ?? false)
+      final hasCustomLabel = _addressLabel?.trim().isNotEmpty ?? false;
+      final locationText = hasCustomLabel
           ? _addressLabel!.trim()
-          : locationText;
+          : _formatLatLng(_selectedPoint!);
+      final label = hasCustomLabel ? _addressLabel!.trim() : locationText;
+
+      final titleText = _titleController.text.trim();
+      final descriptionText = _descriptionController.text.trim();
 
       final success = await context.read<ListingProvider>().createListing(
-            title: _titleController.text,
-            description: _descriptionController.text,
+            title: titleText,
+            description: descriptionText,
             eventDate: _selectedDate!,
             location: locationText,
             items: _items,
@@ -167,8 +194,17 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Açıklama'),
-                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Açıklama',
+                  helperText: 'En az 20 kelime, en fazla 400 kelime',
+                ),
+                minLines: 3,
+                maxLines: 8,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                textCapitalization: TextCapitalization.sentences,
+                inputFormatters: [_turkishFriendlyFormatter],
+                validator: _validateDescription,
               ),
               const SizedBox(height: 16),
               ListTile(
@@ -193,12 +229,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _locationController,
-                decoration: const InputDecoration(labelText: 'Konum'),
-                validator: (v) => v?.isEmpty == true ? 'Zorunlu' : null,
-              ),
-              const SizedBox(height: 16),
               Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -210,7 +240,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Harita Konumu',
+                          Text('Konum Seç',
                               style: Theme.of(context).textTheme.titleMedium),
                           TextButton.icon(
                             onPressed: _openLocationPicker,
@@ -426,16 +456,32 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   late LatLng _point = widget.initialPoint;
   late double _radius = widget.initialRadius.clamp(100, 10000);
   late TextEditingController _labelController;
+  final MapController _mapController = MapController();
+  final TurkiyeLocationService _locationService = TurkiyeLocationService();
+  late Future<List<TurkiyeProvince>> _provinceFuture;
+  TurkiyeProvince? _selectedProvince;
+  TurkiyeDistrict? _selectedDistrict;
+  bool _labelChangedByUser = false;
+  bool _suppressLabelEvent = false;
+  bool _initialLocationApplied = false;
+  bool _isDistrictGeocoding = false;
+  String? _districtGeocodeError;
 
   @override
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: widget.initialLabel ?? '');
+    _labelController.addListener(() {
+      if (_suppressLabelEvent) return;
+      _labelChangedByUser = true;
+    });
+    _provinceFuture = _locationService.fetchProvinces();
   }
 
   @override
   void dispose() {
     _labelController.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -444,6 +490,338 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       return '${(value / 1000).toStringAsFixed(1)} km';
     }
     return '${value.round()} m';
+  }
+
+  Widget _buildProvinceDistrictSelectors(ThemeData theme) {
+    return FutureBuilder<List<TurkiyeProvince>>(
+      future: _provinceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade800),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'İl ve ilçe verileri yükleniyor...',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'İl ve ilçe listesi yüklenemedi.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  snapshot.error?.toString() ?? 'Lütfen tekrar deneyin.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: _retryProvinceFetch,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Tekrar dene'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final provinces = snapshot.data ?? const <TurkiyeProvince>[];
+        if (provinces.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        _applyInitialLocationSelection(provinces);
+        final districtOptions =
+            _selectedProvince?.districts ?? const <TurkiyeDistrict>[];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<String>(
+              value: _selectedProvince?.name,
+              decoration: const InputDecoration(labelText: 'İl'),
+              isExpanded: true,
+              items: provinces
+                  .map(
+                    (province) => DropdownMenuItem(
+                      value: province.name,
+                      child: Text(province.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => _handleProvinceSelection(value, provinces),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedDistrict?.name,
+              decoration: const InputDecoration(labelText: 'İlçe'),
+              isExpanded: true,
+              items: districtOptions
+                  .map(
+                    (district) => DropdownMenuItem(
+                      value: district.name,
+                      child: Text(district.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _selectedProvince == null
+                  ? null
+                  : (value) => _handleDistrictSelection(value),
+            ),
+            if (_isDistrictGeocoding) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'İlçe koordinatları alınıyor...',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (_districtGeocodeError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _districtGeocodeError!,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: Colors.redAccent),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  void _retryProvinceFetch() {
+    setState(() {
+      _provinceFuture = _locationService.fetchProvinces(forceRefresh: true);
+    });
+  }
+
+  void _applyInitialLocationSelection(List<TurkiyeProvince> provinces) {
+    if (_initialLocationApplied) return;
+    final parts = _parseLocationParts(widget.initialLabel);
+    _initialLocationApplied = true;
+    if (parts.$1 == null) return;
+    final province = _findProvinceByName(provinces, parts.$1!);
+    if (province == null) return;
+    TurkiyeDistrict? district;
+    if (parts.$2 != null) {
+      district = _findDistrictByName(province, parts.$2!);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _selectedProvince = province;
+        _selectedDistrict = district;
+      });
+      final lat = district?.latitude ?? province.latitude;
+      final lng = district?.longitude ?? province.longitude;
+      _focusOnCoordinates(lat, lng, district != null ? 12.5 : 10.5);
+    });
+  }
+
+  void _handleProvinceSelection(
+    String? value,
+    List<TurkiyeProvince> provinces,
+  ) {
+    if (value == null || value.trim().isEmpty) {
+      setState(() {
+        _selectedProvince = null;
+        _selectedDistrict = null;
+        _isDistrictGeocoding = false;
+        _districtGeocodeError = null;
+      });
+      if (!_labelChangedByUser) {
+        _setLabelText('');
+      }
+      return;
+    }
+    final province = _findProvinceByName(provinces, value);
+    if (province == null) return;
+    setState(() {
+      _selectedProvince = province;
+      _selectedDistrict = null;
+      _isDistrictGeocoding = false;
+      _districtGeocodeError = null;
+    });
+    _maybeUpdateLabelFromSelection(province, null);
+    _focusOnCoordinates(province.latitude, province.longitude, 10.5);
+  }
+
+  Future<void> _handleDistrictSelection(String? value) async {
+    final province = _selectedProvince;
+    if (province == null) return;
+    if (value == null || value.trim().isEmpty) {
+      setState(() {
+        _selectedDistrict = null;
+        _isDistrictGeocoding = false;
+        _districtGeocodeError = null;
+      });
+      _maybeUpdateLabelFromSelection(province, null);
+      _focusOnCoordinates(province.latitude, province.longitude, 10.5);
+      return;
+    }
+    final district = _findDistrictByName(province, value);
+    if (district == null) return;
+    setState(() {
+      _selectedDistrict = district;
+      _districtGeocodeError = null;
+    });
+    _maybeUpdateLabelFromSelection(province, district);
+
+    if (district.latitude != null && district.longitude != null) {
+      _focusOnCoordinates(district.latitude, district.longitude, 12.5);
+      return;
+    }
+
+    setState(() => _isDistrictGeocoding = true);
+    try {
+      final latLng = await _locationService.fetchDistrictCoordinates(
+        provinceName: province.name,
+        districtName: district.name,
+      );
+      if (!mounted) return;
+      if (latLng != null) {
+        final updatedDistrict = TurkiyeDistrict(
+          name: district.name,
+          latitude: latLng.latitude,
+          longitude: latLng.longitude,
+        );
+        setState(() {
+          _selectedDistrict = updatedDistrict;
+          _isDistrictGeocoding = false;
+          _districtGeocodeError = null;
+        });
+        _focusOnCoordinates(latLng.latitude, latLng.longitude, 12.5);
+      } else {
+        setState(() {
+          _isDistrictGeocoding = false;
+          _districtGeocodeError = 'İlçe koordinatları bulunamadı.';
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isDistrictGeocoding = false;
+        _districtGeocodeError =
+            'Koordinatlar alınamadı. Lütfen tekrar deneyin.';
+      });
+    }
+  }
+
+  void _maybeUpdateLabelFromSelection(
+    TurkiyeProvince? province,
+    TurkiyeDistrict? district,
+  ) {
+    if (province == null) return;
+    if (_labelChangedByUser && _labelController.text.trim().isNotEmpty) {
+      return;
+    }
+    final buffer = StringBuffer(province.name);
+    if (district != null) {
+      buffer
+        ..write(' / ')
+        ..write(district.name);
+    }
+    _setLabelText(buffer.toString());
+  }
+
+  void _setLabelText(String value) {
+    _suppressLabelEvent = true;
+    _labelController.text = value;
+    _suppressLabelEvent = false;
+  }
+
+  void _focusOnCoordinates(double? latitude, double? longitude, double zoom) {
+    if (latitude == null || longitude == null || !mounted) return;
+    final target = LatLng(latitude, longitude);
+    setState(() => _point = target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapController.move(target, zoom);
+    });
+  }
+
+  TurkiyeProvince? _findProvinceByName(
+    List<TurkiyeProvince> provinces,
+    String name,
+  ) {
+    final lower = name.toLowerCase();
+    for (final province in provinces) {
+      if (province.name.toLowerCase() == lower) {
+        return province;
+      }
+    }
+    return null;
+  }
+
+  TurkiyeDistrict? _findDistrictByName(
+    TurkiyeProvince province,
+    String name,
+  ) {
+    final lower = name.toLowerCase();
+    for (final district in province.districts) {
+      if (district.name.toLowerCase() == lower) {
+        return district;
+      }
+    }
+    return null;
+  }
+
+  (String?, String?) _parseLocationParts(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return (null, null);
+    final normalized = raw
+        .replaceAll('•', ',')
+        .replaceAll('/', ',')
+        .replaceAll(' - ', ',')
+        .replaceAll('-', ',');
+    final tokens = normalized
+        .split(',')
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return (null, null);
+    final province = tokens.first;
+    final district = tokens.length > 1 ? tokens[1] : null;
+    return (province, district);
   }
 
   @override
@@ -470,10 +848,13 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
             const SizedBox(height: 16),
             Text('Haritada Konum Seç', style: theme.textTheme.titleMedium),
             const SizedBox(height: 16),
+            _buildProvinceDistrictSelectors(theme),
+            const SizedBox(height: 16),
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: FlutterMap(
+                  mapController: _mapController,
                   options: MapOptions(
                     initialCenter: _point,
                     initialZoom: 12.5,

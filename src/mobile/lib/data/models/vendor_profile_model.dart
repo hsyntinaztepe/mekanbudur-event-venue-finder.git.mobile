@@ -12,6 +12,9 @@ class VendorProfile {
   final String? workingHours;
   final String? photoUrls;
   final String? serviceCategoriesCsv;
+  final double? venueLatitude;
+  final double? venueLongitude;
+  final String? venueAddressLabel;
 
   VendorProfile({
     required this.id,
@@ -27,7 +30,26 @@ class VendorProfile {
     this.workingHours,
     this.photoUrls,
     this.serviceCategoriesCsv,
+    this.venueLatitude,
+    this.venueLongitude,
+    this.venueAddressLabel,
   });
+
+  bool get hasLocation => venueLatitude != null && venueLongitude != null;
+
+  List<String> get photoUrlList => _splitCsv(photoUrls);
+  List<String> get serviceCategoryNames => _splitCsv(serviceCategoriesCsv);
+
+  static List<String> _splitCsv(String? csv) {
+    if (csv == null) return const <String>[];
+    final trimmed = csv.trim();
+    if (trimmed.isEmpty) return const <String>[];
+    return trimmed
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
 
   factory VendorProfile.fromJson(Map<String, dynamic> json) {
     return VendorProfile(
@@ -44,6 +66,9 @@ class VendorProfile {
       workingHours: json['workingHours'],
       photoUrls: json['photoUrls'],
       serviceCategoriesCsv: json['serviceCategoriesCsv'],
+      venueLatitude: (json['venueLatitude'] as num?)?.toDouble(),
+      venueLongitude: (json['venueLongitude'] as num?)?.toDouble(),
+      venueAddressLabel: json['venueAddressLabel'],
     );
   }
 }

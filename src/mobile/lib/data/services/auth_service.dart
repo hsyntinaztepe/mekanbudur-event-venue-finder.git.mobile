@@ -22,6 +22,7 @@ class AuthService {
       await prefs.setString('token', token);
       await prefs.setString('role', role);
       await prefs.setString('displayName', displayName);
+      await prefs.setString('email', email);
 
       return data;
     } catch (e) {
@@ -60,6 +61,7 @@ class AuthService {
       if (returnedDisplayName is String) {
         await prefs.setString('displayName', returnedDisplayName);
       }
+      await prefs.setString('email', email);
 
       return data;
     } catch (e) {

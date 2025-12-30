@@ -4,6 +4,7 @@ using GeoService.DTOs;
 using GeoService.Models;
 using GeoService.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -122,6 +123,37 @@ app.MapGet("/api/places/by-ref", async (string refType, string refId, GeoDbConte
     var p = await db.Places.FirstOrDefaultAsync(x => x.RefType == refType && x.RefId == refId);
     if (p is null) return Results.NotFound();
     return Results.Ok(new PlaceResponse(p.Id, p.RefType, p.RefId, p.Latitude, p.Longitude, p.Radius, p.AddressLabel));
+});
+
+app.MapGet("/api/places/by-type", async (string refType, GeoDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(refType))
+    {
+        return Results.BadRequest("refType is required");
+    }
+
+    try
+    {
+        var normalized = refType.Trim();
+        var places = await db.Places
+            .Where(p => p.RefType == normalized)
+            .OrderByDescending(p => p.UpdatedAtUtc ?? p.CreatedAtUtc)
+            .Select(p => new PlaceResponse(
+                p.Id,
+                p.RefType,
+                p.RefId,
+                p.Latitude,
+                p.Longitude,
+                p.Radius,
+                p.AddressLabel))
+            .ToListAsync();
+
+        return Results.Ok(places);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error fetching places: {ex.Message}", statusCode: 500);
+    }
 });
 
 // Google Places endpoint - Ankara/Gölbaşı için

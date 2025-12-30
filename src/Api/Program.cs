@@ -77,6 +77,8 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
+app.UseStaticFiles();
+
 app.UseCors("All");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -182,7 +184,7 @@ app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, P
         }
 
         var token = jwt.Generate(user);
-        return Results.Ok(new AuthResponse(token, user.Role.ToString(), user.DisplayName ?? user.Email));
+        return Results.Ok(new AuthResponse(token, user.Role.ToString(), user.DisplayName ?? user.Email, user.Id));
     }
     catch (Exception ex)
     {
@@ -207,13 +209,32 @@ app.MapPost("/api/auth/login", async (LoginRequest req, AppDbContext db, Passwor
         return Results.BadRequest(new { error = "Geçersiz kimlik bilgileri." });
 
     var token = jwt.Generate(user);
-    return Results.Ok(new AuthResponse(token, user.Role.ToString(), user.DisplayName ?? user.Email));
+    return Results.Ok(new AuthResponse(token, user.Role.ToString(), user.DisplayName ?? user.Email, user.Id));
 });
 
 // CATEGORIES
 app.MapGet("/api/categories", async (AppDbContext db) =>
     await db.ServiceCategories.OrderBy(c => c.Name).Select(c => new { c.Id, c.Name }).ToListAsync()
 );
+
+// PUBLIC VENDORS DIRECTORY (for mobile "Üye mekanlar" list)
+app.MapGet("/api/vendors", async (AppDbContext db) =>
+{
+    var vendors = await db.VendorProfiles
+        .OrderBy(v => v.CompanyName)
+        .Select(v => new
+        {
+            userId = v.UserId,
+            companyName = v.CompanyName,
+            description = v.Description,
+            serviceCategoriesCsv = v.ServiceCategoriesCsv,
+            photoUrls = v.PhotoUrls,
+            isVerified = v.IsVerified
+        })
+        .ToListAsync();
+
+    return Results.Ok(vendors);
+});
 
 // LISTINGS
 app.MapGet("/api/listings", async (AppDbContext db, GeoClient geo, int? categoryId, string? q, string? location, decimal? minBudget, decimal? maxBudget) =>
@@ -249,6 +270,7 @@ app.MapGet("/api/listings", async (AppDbContext db, GeoClient geo, int? category
             l.Id, l.Title, l.Description, l.EventDate, l.Location, 
             l.Items.Sum(i => i.Budget), 
             l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
+            l.CreatedByUserId,
             l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc,
             lat, lng, radius, label,
             l.Visibility
@@ -275,6 +297,7 @@ app.MapGet("/api/listings/{id:guid}", async (Guid id, AppDbContext db, GeoClient
         l.Id, l.Title, l.Description, l.EventDate, l.Location, 
         l.Items.Sum(i => i.Budget),
         l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
+        l.CreatedByUserId,
         l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc,
         lat, lng, radius, label,
         l.Visibility
@@ -293,6 +316,7 @@ app.MapGet("/api/listings/mine", [Authorize(Roles = "User")] async (ClaimsPrinci
             l.Id, l.Title, l.Description, l.EventDate, l.Location, 
             l.Items.Sum(i => i.Budget),
             l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
+            l.CreatedByUserId,
             l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc, null, null, null, null,
             l.Visibility))
         .ToListAsync();
@@ -727,6 +751,63 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
     }
     
     return Results.Ok(new { success = true, message = "Profil başarıyla güncellendi." });
+});
+
+app.MapPost("/api/vendor/photos", [Authorize(Roles = "Vendor")] async (HttpRequest request, IWebHostEnvironment env) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { error = "Lütfen form-data formatında dosya gönderin." });
+    }
+
+    var form = await request.ReadFormAsync();
+    if (form.Files.Count == 0)
+    {
+        return Results.BadRequest(new { error = "Yüklenecek fotoğraf bulunamadı." });
+    }
+
+    var webRoot = env.WebRootPath;
+    if (string.IsNullOrWhiteSpace(webRoot))
+    {
+        webRoot = Path.Combine(env.ContentRootPath, "wwwroot");
+    }
+
+    var uploadDir = Path.Combine(webRoot, "uploads", "vendor-photos");
+    Directory.CreateDirectory(uploadDir);
+
+    const int maxFileBytes = 5 * 1024 * 1024;
+    var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+    var uploadedUrls = new List<string>();
+
+    foreach (var file in form.Files)
+    {
+        if (file.Length == 0) continue;
+        if (file.Length > maxFileBytes)
+        {
+            return Results.BadRequest(new { error = "Fotoğraflar en fazla 5MB olabilir." });
+        }
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+        {
+            return Results.BadRequest(new { error = $"Desteklenmeyen dosya türü: {ext}" });
+        }
+
+        var fileName = $"{Guid.NewGuid():N}{ext}";
+        var destination = Path.Combine(uploadDir, fileName);
+        await using (var stream = File.Create(destination))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var relativeUrl = $"/uploads/vendor-photos/{fileName}";
+        var absoluteUrl = request.Host.HasValue
+            ? $"{request.Scheme}://{request.Host}{relativeUrl}"
+            : relativeUrl;
+        uploadedUrls.Add(absoluteUrl);
+    }
+
+    return Results.Ok(new { urls = uploadedUrls });
 });
 
 app.Run();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/listing_model.dart';
 import '../../data/services/listing_service.dart';
 
@@ -10,6 +11,9 @@ class ListingProvider extends ChangeNotifier {
   List<Listing> _allListings = [];
   bool _isLoading = false;
   String? _error;
+  Set<String> _favoriteListingIds = <String>{};
+  String? _favoritesOwnerKey;
+  bool _favoritesLoaded = false;
 
   ListingProvider(this._listingService);
 
@@ -18,6 +22,67 @@ class ListingProvider extends ChangeNotifier {
   List<Listing> get allListings => _allListings;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get favoritesReady => _favoritesLoaded;
+
+  bool isFavorite(String listingId) => _favoriteListingIds.contains(listingId);
+
+  String _favoritesStorageKey(String ownerIdentifier) =>
+      'favorites_$ownerIdentifier';
+
+  Future<void> loadFavorites({String? ownerIdentifier}) async {
+    if (ownerIdentifier == null || ownerIdentifier.isEmpty) {
+      final hadData =
+          _favoriteListingIds.isNotEmpty || _favoritesOwnerKey != null;
+      _favoriteListingIds = <String>{};
+      _favoritesOwnerKey = null;
+      _favoritesLoaded = true;
+      if (hadData) {
+        notifyListeners();
+      }
+      return;
+    }
+
+    if (_favoritesLoaded && _favoritesOwnerKey == ownerIdentifier) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_favoritesStorageKey(ownerIdentifier)) ??
+        <String>[];
+    _favoriteListingIds = stored.toSet();
+    _favoritesOwnerKey = ownerIdentifier;
+    _favoritesLoaded = true;
+    notifyListeners();
+  }
+
+  Future<bool> toggleFavorite({
+    required String listingId,
+    required String ownerIdentifier,
+  }) async {
+    if (ownerIdentifier.isEmpty) {
+      return false;
+    }
+
+    if (!_favoritesLoaded || _favoritesOwnerKey != ownerIdentifier) {
+      await loadFavorites(ownerIdentifier: ownerIdentifier);
+    }
+
+    final isCurrentlyFavorite = _favoriteListingIds.contains(listingId);
+    if (isCurrentlyFavorite) {
+      _favoriteListingIds.remove(listingId);
+    } else {
+      _favoriteListingIds.add(listingId);
+    }
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _favoritesStorageKey(ownerIdentifier),
+      _favoriteListingIds.toList(),
+    );
+
+    return !isCurrentlyFavorite;
+  }
 
   Future<void> fetchCategories() async {
     _isLoading = true;

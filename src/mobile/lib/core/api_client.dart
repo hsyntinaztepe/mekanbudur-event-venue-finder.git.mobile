@@ -2,8 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String baseUrl =
-      'http://10.0.2.2:8081/api'; // Android emulator uses 10.0.2.2 to reach host
+  static const String baseUrl = 'http://10.0.2.2:8081/api';
 
   final Dio _dio;
 

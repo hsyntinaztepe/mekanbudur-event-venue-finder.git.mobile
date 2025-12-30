@@ -26,6 +26,7 @@ namespace MekanBudur.Api.DTOs
         string? Location,
         decimal TotalBudget,
         List<ListingItemResponse> Items,
+        Guid CreatedByUserId,
         string CreatedBy,
         string Status,
         DateTime CreatedAtUtc,
