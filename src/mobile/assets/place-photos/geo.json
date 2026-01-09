@@ -1,0 +1,348 @@
+{
+  "generatedAtUtc": "2026-01-09T16:37:15.261096Z",
+  "places": [
+    {
+      "name": "Kronos Gölbaşı Düğün Salonu",
+      "category": "wedding",
+      "address": "Gaziosmanpaşa, Sahilyolu Caddesi 363 Sokak No:2/A, Gölbaşı",
+      "latitude": 39.7741057,
+      "longitude": 32.8038876
+    },
+    {
+      "name": "Life Park Düğün Salonu",
+      "category": "wedding",
+      "address": "Gaziosmanpaşa, Ankara Gölbaşı Çıkışı 2. km, Gölbaşı",
+      "latitude": 39.74828919999999,
+      "longitude": 32.8035637
+    },
+    {
+      "name": "Akalın Balo Salonu",
+      "category": "wedding",
+      "address": "Haymana yolu Bulvarı. 771. sokak Girişi, Gölbaşı",
+      "latitude": 39.7935862,
+      "longitude": 32.7934395
+    },
+    {
+      "name": "Rıhtım Riva Eymir",
+      "category": "wedding",
+      "address": "Yaylabağ, Küme Evleri Caddesi No: 364/4, Gölbaşı",
+      "latitude": 39.8193731,
+      "longitude": 32.86080930000001
+    },
+    {
+      "name": "Hera Balo Salonları",
+      "category": "wedding",
+      "address": "Karşıyaka, 768. Sk. no:8, Gölbaşı",
+      "latitude": 39.7930717,
+      "longitude": 32.7929687
+    },
+    {
+      "name": "pembe köşk balosalonları",
+      "category": "wedding",
+      "address": "Karşıyaka, 777. Sk. No:19, Gölbaşı",
+      "latitude": 39.7946777,
+      "longitude": 32.7947502
+    },
+    {
+      "name": "Bahçeli Park Düğün Salonu",
+      "category": "wedding",
+      "address": "Bahçelievler, 819. Sk. No:77, Gölbaşı",
+      "latitude": 39.7864618,
+      "longitude": 32.8166466
+    },
+    {
+      "name": "Göl Seyir Gölbaşı Kır Bahçesi & Balo Salonu",
+      "category": "wedding",
+      "address": "Karşıyaka mahallesi no 166",
+      "latitude": 39.7918057,
+      "longitude": 32.7926646
+    },
+    {
+      "name": "Ankyra Event - Düğün Salonu",
+      "category": "wedding",
+      "address": "Gaziosmanpaşa, Gölbaşı",
+      "latitude": 39.7574209,
+      "longitude": 32.803215
+    },
+    {
+      "name": "Florya Wedding",
+      "category": "wedding",
+      "address": "Gaziosmanpaşa, Sahil Cd. No:22, Gölbaşı",
+      "latitude": 39.78560969999999,
+      "longitude": 32.8041042
+    },
+    {
+      "name": "Elite Wedding Hall",
+      "category": "wedding",
+      "address": "Karşıyaka, Haymana Yolu Blv. No:182, Gölbaşı",
+      "latitude": 39.7889789,
+      "longitude": 32.79171
+    },
+    {
+      "name": "GÖLDE LUXE WEDDİNG & EVENTS",
+      "category": "wedding",
+      "address": "Karşıyaka mahalleesi, Haymana Yolu Bulvarı, no:208, Gölbaşı",
+      "latitude": 39.7857873,
+      "longitude": 32.789362
+    },
+    {
+      "name": "villadestewedding",
+      "category": "wedding",
+      "address": "Karşıyaka, 712. Sk. no:1, Gölbaşı",
+      "latitude": 39.7856,
+      "longitude": 32.7891392
+    },
+    {
+      "name": "Panorama Wedding & Event Gölbaşı Düğün Salonu",
+      "category": "wedding",
+      "address": "3.km, Karşıyaka, Haymana Yolu Blv. No:21, Gölbaşı",
+      "latitude": 39.7814823,
+      "longitude": 32.7878482
+    },
+    {
+      "name": "YESS BALO VE DAVET SALONLARI",
+      "category": "wedding",
+      "address": "Karşıyaka, 730/1. Sk. no 5, Gölbaşı",
+      "latitude": 39.7889595,
+      "longitude": 32.7909736
+    },
+    {
+      "name": "ÇIRAĞAN MOGAN",
+      "category": "wedding",
+      "address": "Sok, Karşıyaka, Haymana Yolu Blv. No: no:115, Gölbaşı",
+      "latitude": 39.7915553,
+      "longitude": 32.7936134
+    },
+    {
+      "name": "Gölbaşı Akalın Wedding Plaza",
+      "category": "wedding",
+      "address": "Karşıyaka Haymana Yolu Bulvarı, Gölbaşı",
+      "latitude": 39.7937815,
+      "longitude": 32.7942841
+    },
+    {
+      "name": "ÜLGER KONAĞI KIR BAHÇESİ",
+      "category": "wedding",
+      "address": "Bahçelievler, 6. Sk. Numara:21, Gölbaşı",
+      "latitude": 39.7496271,
+      "longitude": 32.8115863
+    },
+    {
+      "name": "İncek Boğaz Ankara Fotoğraf Platosu",
+      "category": "photographer",
+      "address": "Taşpınar Mahallesi No:1/B, Gölbaşı",
+      "latitude": 39.8009126,
+      "longitude": 32.7822562
+    },
+    {
+      "name": "Düğüne Gel",
+      "category": "photographer",
+      "address": "Seğmenler, Seğmenler Cd. No:62/A, Gölbaşı",
+      "latitude": 39.793081,
+      "longitude": 32.815683
+    },
+    {
+      "name": "Baris Film & Fotoğrafçılık",
+      "category": "photographer",
+      "address": "Karşıyaka, 765. Sk. No:6, Gölbaşı",
+      "latitude": 39.793845,
+      "longitude": 32.792733
+    },
+    {
+      "name": "Foto Turgut Acele Vesikalik",
+      "category": "photographer",
+      "address": "Bahçelievler, Gölbaşı",
+      "latitude": 39.787015,
+      "longitude": 32.80821350000001
+    },
+    {
+      "name": "Foto Yıldız",
+      "category": "photographer",
+      "address": "Bahçelievler, 297. Sk. D:3-E, Gölbaşı",
+      "latitude": 39.7899945,
+      "longitude": 32.8107502
+    },
+    {
+      "name": "Asonka Fotoğraf Stüdyosu",
+      "category": "photographer",
+      "address": "Bahçelievler, 278. Sk. No:11 D:E, Gölbaşı",
+      "latitude": 39.7902684,
+      "longitude": 32.8081983
+    },
+    {
+      "name": "Uzay Photography",
+      "category": "photographer",
+      "address": "Seğmenler, 927. Sk. NO:17, Gölbaşı",
+      "latitude": 39.7930466,
+      "longitude": 32.8093642
+    },
+    {
+      "name": "Renko Fotoğrafçılık",
+      "category": "photographer",
+      "address": "Karşıyaka, 765. Sk. no: 6, Gölbaşı",
+      "latitude": 39.7938569,
+      "longitude": 32.7928349
+    },
+    {
+      "name": "Kuzey Fotoğraf",
+      "category": "photographer",
+      "address": "Bahçelievler, 278. Sk. 11/A, Gölbaşı",
+      "latitude": 39.7904467,
+      "longitude": 32.807894
+    },
+    {
+      "name": "Studyo S&S Gölbaşı",
+      "category": "photographer",
+      "address": "Seğmenler, Oğuz Kağan Usta Cd 47b a, Gölbaşı",
+      "latitude": 39.7937051,
+      "longitude": 32.8109443
+    },
+    {
+      "name": "Alper Color Fotoğraf Stüdyosu",
+      "category": "photographer",
+      "address": "Gaziosmanpaşa, 377. Sk. No:9 D:B, Gölbaşı",
+      "latitude": 39.7918267,
+      "longitude": 32.8044829
+    },
+    {
+      "name": "Ankara Düğün Fotoğrafçısı Art Prodüksiyon",
+      "category": "photographer",
+      "address": "Karşıyaka, Haymana Yolu Blv. No:182, Gölbaşı",
+      "latitude": 39.7895519,
+      "longitude": 32.7920694
+    },
+    {
+      "name": "SARAÇOĞLU MEDYA",
+      "category": "photographer",
+      "address": "Gaziosmanpaşa, Ankara Cd. Gölbaşı Ticaret Merkezi, Gölbaşı",
+      "latitude": 39.7924382,
+      "longitude": 32.8056726
+    },
+    {
+      "name": "stüdyo anılar 2",
+      "category": "photographer",
+      "address": "Seğmenler, 927. Sk. no:18/B, Gölbaşı",
+      "latitude": 39.792884,
+      "longitude": 32.8095278
+    },
+    {
+      "name": "Ekmeek – Fırın Pasta Cafe",
+      "category": "bakery",
+      "address": "Bahçelievler, 281. Cadde 98G, Gölbaşı",
+      "latitude": 39.7894783,
+      "longitude": 32.8108558
+    },
+    {
+      "name": "Gölbaşı ekleristan",
+      "category": "bakery",
+      "address": "Seğmenler, Cumhuriyet Cd. no:41/c, Gölbaşı",
+      "latitude": 39.7929139,
+      "longitude": 32.8090591
+    },
+    {
+      "name": "Mozi Pastanesi",
+      "category": "bakery",
+      "address": "Gaziosmanpaşa, 377. Sk. No:17, Gölbaşı",
+      "latitude": 39.7924103,
+      "longitude": 32.8054152
+    },
+    {
+      "name": "UMUT NAMZET PASTA CAFE",
+      "category": "bakery",
+      "address": "Bahçelievler, Cemal Gürsel Cd. 18/B, Gölbaşı",
+      "latitude": 39.7893891,
+      "longitude": 32.8075677
+    },
+    {
+      "name": "İSA NAMZET PASTA CAFE",
+      "category": "bakery",
+      "address": "Gazi Osman paşa mahallesi Hükümet cad. No :7/A, Gölbaşı",
+      "latitude": 39.7913856,
+      "longitude": 32.805424
+    },
+    {
+      "name": "Mogan Pastanesi",
+      "category": "bakery",
+      "address": "Eymir, Manyas Gölü Cd. No:4 D:7, Gölbaşı",
+      "latitude": 39.8073039,
+      "longitude": 32.8467736
+    },
+    {
+      "name": "Hacı Baki Gölbaşı",
+      "category": "bakery",
+      "address": "Bahçelievler, Cumhuriyet Cd. 18/A, Gölbaşı",
+      "latitude": 39.7890652,
+      "longitude": 32.8081265
+    },
+    {
+      "name": "Damla Fırın Pasta",
+      "category": "bakery",
+      "address": "Bahçelievler, 281. Cadde No 27 D:A, Gölbaşı",
+      "latitude": 39.7905408,
+      "longitude": 32.8090491
+    },
+    {
+      "name": "Villa Cakes",
+      "category": "bakery",
+      "address": "Karşıyaka, 612 Cd. No:44, Gölbaşı",
+      "latitude": 39.7867818,
+      "longitude": 32.7915009
+    },
+    {
+      "name": "Pastane Sinan",
+      "category": "bakery",
+      "address": "Eymir, 832. Sk. No:8 D:B, Gölbaşı",
+      "latitude": 39.8073181,
+      "longitude": 32.8461677
+    },
+    {
+      "name": "Orkide çiçekçilik",
+      "category": "florist",
+      "address": "Karşıyaka, 768. Sk. No:3, Gölbaşı",
+      "latitude": 39.7933956,
+      "longitude": 32.792961
+    },
+    {
+      "name": "çiçek dünyası",
+      "category": "florist",
+      "address": "Bahçelievler, 306. Sk. No:3, Gölbaşı",
+      "latitude": 39.7866858,
+      "longitude": 32.8078177
+    },
+    {
+      "name": "Gölbaşı Çiçek-Süs Bitkileri",
+      "category": "florist",
+      "address": "Seğmenler, Cemal Gürsel Cd. no:7, Gölbaşı",
+      "latitude": 39.791823,
+      "longitude": 32.8068527
+    },
+    {
+      "name": "Beyaz Saray Çiçekçilik",
+      "category": "florist",
+      "address": "Bahçelievler, 278. Sk. 17B, Gölbaşı",
+      "latitude": 39.7902507,
+      "longitude": 32.8077823
+    },
+    {
+      "name": "Gölbaşı çiçekçilik",
+      "category": "florist",
+      "address": "Bahçelievler, 281. Cadde No:21, Gölbaşı",
+      "latitude": 39.7895565,
+      "longitude": 32.810194
+    },
+    {
+      "name": "Uzay Çiçekçilik",
+      "category": "florist",
+      "address": "Bahçelievler, 296. Sk. no:6, Gölbaşı",
+      "latitude": 39.7897701,
+      "longitude": 32.8089291
+    },
+    {
+      "name": "Azra çiçek",
+      "category": "florist",
+      "address": "Seğmenler, Cemal Gürsel Cd. 11/B, Gölbaşı",
+      "latitude": 39.7919706,
+      "longitude": 32.806815
+    }
+  ]
+}

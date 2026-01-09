@@ -93,6 +93,17 @@ string GetDisplayName(AppDbContext db, Guid userId)
 Guid GetUserId(ClaimsPrincipal user)
     => Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub"), out var g) ? g : Guid.Empty;
 
+async Task<VendorRatingSummaryResponse> GetVendorRatingSummaryAsync(AppDbContext db, Guid vendorUserId)
+{
+    var summary = await db.VendorRatings
+        .Where(r => r.VendorUserId == vendorUserId)
+        .GroupBy(r => r.VendorUserId)
+        .Select(g => new { Average = g.Average(r => (double)r.Rating), Count = g.Count() })
+        .FirstOrDefaultAsync();
+
+    return new VendorRatingSummaryResponse(summary?.Average ?? 0, summary?.Count ?? 0);
+}
+
 // AUTH
 app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, PasswordHasher<User> hasher, JwtTokenService jwt, GeoClient geo) =>
 {
@@ -218,22 +229,69 @@ app.MapGet("/api/categories", async (AppDbContext db) =>
 );
 
 // PUBLIC VENDORS DIRECTORY (for mobile "Üye mekanlar" list)
-app.MapGet("/api/vendors", async (AppDbContext db) =>
+app.MapGet("/api/vendors", async (AppDbContext db, GeoClient geo) =>
 {
-    var vendors = await db.VendorProfiles
+    var vendorProfiles = await db.VendorProfiles
         .OrderBy(v => v.CompanyName)
         .Select(v => new
         {
-            userId = v.UserId,
-            companyName = v.CompanyName,
-            description = v.Description,
-            serviceCategoriesCsv = v.ServiceCategoriesCsv,
-            photoUrls = v.PhotoUrls,
-            isVerified = v.IsVerified
+            v.UserId,
+            v.CompanyName,
+            v.Description,
+            v.ServiceCategoriesCsv,
+            v.PhotoUrls,
+            v.IsVerified,
+            RatingAverage = db.VendorRatings
+                .Where(r => r.VendorUserId == v.UserId)
+                .Select(r => (double?)r.Rating)
+                .Average() ?? 0,
+            RatingCount = db.VendorRatings.Count(r => r.VendorUserId == v.UserId)
         })
         .ToListAsync();
 
-    return Results.Ok(vendors);
+    var results = new List<object>(vendorProfiles.Count);
+
+    foreach (var vendor in vendorProfiles)
+    {
+        double? lat = null;
+        double? lng = null;
+        double? radius = null;
+        string? addressLabel = null;
+
+        try
+        {
+            var place = await geo.ByRefAsync("Vendor", vendor.UserId.ToString());
+            if (place is not null)
+            {
+                lat = place.Latitude;
+                lng = place.Longitude;
+                radius = place.Radius;
+                addressLabel = place.AddressLabel;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Geo lookup failed for vendor {vendor.UserId}: {ex.Message}");
+        }
+
+        results.Add(new
+        {
+            userId = vendor.UserId,
+            companyName = vendor.CompanyName,
+            description = vendor.Description,
+            serviceCategoriesCsv = vendor.ServiceCategoriesCsv,
+            photoUrls = vendor.PhotoUrls,
+            isVerified = vendor.IsVerified,
+            ratingAverage = vendor.RatingAverage,
+            ratingCount = vendor.RatingCount,
+            venueLatitude = lat,
+            venueLongitude = lng,
+            venueRadius = radius,
+            venueAddressLabel = addressLabel
+        });
+    }
+
+    return Results.Ok(results);
 });
 
 // LISTINGS
@@ -651,6 +709,8 @@ app.MapGet("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (ClaimsPri
         }
     }
     catch { /* Ignore geo errors */ }
+
+    var ratingSummary = await GetVendorRatingSummaryAsync(db, profile.UserId);
     
     return Results.Ok(new VendorProfileResponse(
         profile.Id,
@@ -667,13 +727,16 @@ app.MapGet("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (ClaimsPri
         profile.WorkingHours,
         profile.PhotoUrls,
         profile.ServiceCategoriesCsv,
+        profile.SuitableForCsv,
         profile.IsVerified,
         profile.CreatedAtUtc,
         profile.UpdatedAtUtc,
         lat,
         lng,
         radius,
-        addressLabel
+        addressLabel,
+        ratingSummary.AverageRating,
+        ratingSummary.RatingsCount
     ));
 });
 
@@ -684,7 +747,7 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
     GeoClient geo) =>
 {
     var myId = GetUserId(me);
-    Console.WriteLine($"[VendorProfile] PUT: UserId={myId}, ServiceCategoriesCsv='{req.ServiceCategoriesCsv}'");
+    Console.WriteLine($"[VendorProfile] PUT: UserId={myId}, ServiceCategoriesCsv='{req.ServiceCategoriesCsv}', SuitableForCsv='{req.SuitableForCsv}'");
     var profile = await db.VendorProfiles.FirstOrDefaultAsync(vp => vp.UserId == myId);
 
     if (string.IsNullOrWhiteSpace(req.CompanyName))
@@ -699,6 +762,7 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
             UserId = myId,
             CompanyName = req.CompanyName.Trim(),
             ServiceCategoriesCsv = req.ServiceCategoriesCsv,
+            SuitableForCsv = req.SuitableForCsv,
             Description = req.Description,
             VenueType = req.VenueType,
             Capacity = req.Capacity,
@@ -729,6 +793,7 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
     profile.WorkingHours = req.WorkingHours;
     profile.PhotoUrls = req.PhotoUrls;
     profile.ServiceCategoriesCsv = req.ServiceCategoriesCsv;
+    profile.SuitableForCsv = req.SuitableForCsv;
     profile.UpdatedAtUtc = DateTime.UtcNow;
     
     await db.SaveChangesAsync();
@@ -751,6 +816,95 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
     }
     
     return Results.Ok(new { success = true, message = "Profil başarıyla güncellendi." });
+});
+
+app.MapGet("/api/vendors/{vendorUserId:guid}/ratings", async (Guid vendorUserId, AppDbContext db) =>
+{
+    var vendorExists = await db.VendorProfiles.AnyAsync(v => v.UserId == vendorUserId);
+    if (!vendorExists)
+        return Results.NotFound(new { error = "Üye mekan bulunamadı." });
+
+    var ratings = await db.VendorRatings
+        .Where(r => r.VendorUserId == vendorUserId)
+        .OrderByDescending(r => r.CreatedAtUtc)
+        .Select(r => new VendorRatingResponse(
+            r.Id,
+            r.VendorUserId,
+            r.MemberUserId,
+            r.Rating,
+            r.Comment,
+            r.CreatedAtUtc,
+            r.UpdatedAtUtc,
+            r.MemberUser.DisplayName ?? r.MemberUser.Email))
+        .ToListAsync();
+
+    var summary = await GetVendorRatingSummaryAsync(db, vendorUserId);
+
+    return Results.Ok(new VendorRatingListResponse(summary, ratings));
+});
+
+app.MapPost("/api/vendors/{vendorUserId:guid}/ratings", [Authorize(Roles = "User")] async (
+    Guid vendorUserId,
+    VendorRatingRequest req,
+    ClaimsPrincipal me,
+    AppDbContext db) =>
+{
+    var memberId = GetUserId(me);
+    if (memberId == Guid.Empty) return Results.Unauthorized();
+
+    if (memberId == vendorUserId)
+        return Results.BadRequest(new { error = "Kendi mekanınıza puan veremezsiniz." });
+
+    var vendorProfile = await db.VendorProfiles.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
+    if (vendorProfile is null)
+        return Results.NotFound(new { error = "Üye mekan bulunamadı." });
+
+    if (req.Rating < 1 || req.Rating > 5)
+        return Results.BadRequest(new { error = "Puan 1 ile 5 arasında olmalıdır." });
+
+    var sanitizedComment = string.IsNullOrWhiteSpace(req.Comment) ? null : req.Comment.Trim();
+
+    var rating = await db.VendorRatings
+        .FirstOrDefaultAsync(r => r.VendorUserId == vendorUserId && r.MemberUserId == memberId);
+
+    if (rating is null)
+    {
+        rating = new VendorRating
+        {
+            VendorUserId = vendorUserId,
+            MemberUserId = memberId,
+            Rating = req.Rating,
+            Comment = sanitizedComment,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.VendorRatings.Add(rating);
+    }
+    else
+    {
+        rating.Rating = req.Rating;
+        rating.Comment = sanitizedComment;
+        rating.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    await db.SaveChangesAsync();
+
+    var memberName = await db.Users
+        .Where(u => u.Id == memberId)
+        .Select(u => u.DisplayName ?? u.Email)
+        .FirstAsync();
+
+    var summary = await GetVendorRatingSummaryAsync(db, vendorUserId);
+    var response = new VendorRatingResponse(
+        rating.Id,
+        rating.VendorUserId,
+        rating.MemberUserId,
+        rating.Rating,
+        rating.Comment,
+        rating.CreatedAtUtc,
+        rating.UpdatedAtUtc,
+        memberName);
+
+    return Results.Ok(new { rating = response, summary });
 });
 
 app.MapPost("/api/vendor/photos", [Authorize(Roles = "Vendor")] async (HttpRequest request, IWebHostEnvironment env) =>

@@ -21,5 +21,7 @@ namespace MekanBudur.Api.Models
 
         public VendorProfile? VendorProfile { get; set; }
         public List<EventListing> ListingsCreated { get; set; } = new();
+        public List<VendorRating> RatingsGiven { get; set; } = new();
+        public List<VendorRating> RatingsReceived { get; set; } = new();
     }
 }

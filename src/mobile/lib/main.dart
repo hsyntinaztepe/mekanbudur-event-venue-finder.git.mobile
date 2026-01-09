@@ -9,12 +9,14 @@ import 'data/services/bid_service.dart';
 import 'data/services/vendor_service.dart';
 import 'data/services/place_service.dart';
 import 'data/services/google_places_service.dart';
+import 'data/services/embedded_places_service.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/listing_provider.dart';
 import 'presentation/providers/bid_provider.dart';
 import 'presentation/providers/vendor_provider.dart';
 import 'presentation/providers/place_provider.dart';
 import 'presentation/providers/google_places_provider.dart';
+import 'presentation/providers/embedded_places_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,6 +36,7 @@ class MyApp extends StatelessWidget {
     final geoApiClient = GeoApiClient();
     final placeService = PlaceService(geoApiClient);
     final googlePlacesService = GooglePlacesService(geoApiClient);
+    final embeddedPlacesService = EmbeddedPlacesService();
 
     return MultiProvider(
       providers: [
@@ -45,29 +48,23 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => GooglePlacesProvider(googlePlacesService),
         ),
+        ChangeNotifierProvider(
+          create: (_) => EmbeddedPlacesProvider(embeddedPlacesService),
+        ),
       ],
       child: MaterialApp.router(
         title: 'MekanBudur',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
+            brightness: Brightness.light,
           ),
           useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF0F1116),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF151922),
-            foregroundColor: Colors.white,
-            elevation: 0,
-          ),
-          cardColor: const Color(0xFF1B1F2A),
-          textTheme: ThemeData(brightness: Brightness.dark).textTheme.apply(
-                bodyColor: Colors.white,
-                displayColor: Colors.white,
-              ),
+          scaffoldBackgroundColor: Colors.white,
+          appBarTheme: const AppBarTheme(elevation: 0),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: const Color(0xFF1F2533),
+            fillColor: const Color(0xFFF2F3F7),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -75,7 +72,7 @@ class MyApp extends StatelessWidget {
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: Colors.deepPurple,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
               shape: RoundedRectangleBorder(
@@ -85,7 +82,7 @@ class MyApp extends StatelessWidget {
           ),
           filledButtonTheme: FilledButtonThemeData(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
+              backgroundColor: Colors.deepPurple,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
               shape: RoundedRectangleBorder(
@@ -95,17 +92,13 @@ class MyApp extends StatelessWidget {
           ),
           outlinedButtonTheme: OutlinedButtonThemeData(
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xFF6C63FF)),
+              foregroundColor: Colors.deepPurple,
+              side: const BorderSide(color: Colors.deepPurple),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-          ),
-          listTileTheme: const ListTileThemeData(
-            iconColor: Colors.white70,
-            textColor: Colors.white,
           ),
         ),
         routerConfig: router,

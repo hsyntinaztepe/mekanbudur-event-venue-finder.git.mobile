@@ -2,6 +2,9 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 import '../models/public_vendor_model.dart';
+import '../models/vendor_public_profile_model.dart';
+import '../models/vendor_rating_summary_model.dart';
+import '../models/vendor_review_model.dart';
 import '../models/vendor_profile_model.dart';
 
 class VendorService {
@@ -56,7 +59,19 @@ class VendorService {
   }
 
   Future<List<PublicVendor>> getPublicVendors() async {
-    final response = await _apiClient.dio.get('/vendors');
+    // Prefer `/api/vendors` (does not depend on Geo). Fallback to legacy `/api/vendors/map`.
+    // ApiClient baseUrl already includes `/api`.
+    Response<dynamic> response;
+    try {
+      response = await _apiClient.dio.get('/vendors');
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 404) {
+        response = await _apiClient.dio.get('/vendors/map');
+      } else {
+        rethrow;
+      }
+    }
     final data = response.data;
     if (data is List) {
       return data
@@ -66,5 +81,49 @@ class VendorService {
           .toList(growable: false);
     }
     throw const FormatException('Vendor listesi okunamadı');
+  }
+
+  Future<VendorPublicProfile> getPublicVendorProfile(
+      String vendorUserId) async {
+    final response = await _apiClient.dio.get('/vendors/$vendorUserId');
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      return VendorPublicProfile.fromJson(data);
+    }
+    throw const FormatException('Vendor profili okunamadı');
+  }
+
+  Future<VendorRatingSummary> getVendorRating(String vendorUserId) async {
+    final response = await _apiClient.dio.get('/vendors/$vendorUserId/rating');
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      return VendorRatingSummary.fromJson(data);
+    }
+    throw const FormatException('Vendor puanı okunamadı');
+  }
+
+  Future<List<VendorReview>> getVendorReviews(String vendorUserId) async {
+    final response = await _apiClient.dio.get('/vendors/$vendorUserId/reviews');
+    final data = response.data;
+    if (data is List) {
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(VendorReview.fromJson)
+          .where((r) => r.id.isNotEmpty)
+          .toList(growable: false);
+    }
+    throw const FormatException('Vendor yorumları okunamadı');
+  }
+
+  Future<void> askVendorQuestion(String vendorUserId, String question) async {
+    final trimmed = question.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('Soru boş olamaz');
+    }
+
+    await _apiClient.dio.post(
+      '/vendors/$vendorUserId/questions',
+      data: <String, dynamic>{'question': trimmed},
+    );
   }
 }

@@ -4,12 +4,14 @@ class GooglePlaceModel {
     required this.address,
     required this.latitude,
     required this.longitude,
+    this.photoReference,
   });
 
   final String name;
   final String address;
   final double latitude;
   final double longitude;
+  final String? photoReference;
 
   factory GooglePlaceModel.fromJson(Map<String, dynamic> json) {
     return GooglePlaceModel(
@@ -17,6 +19,7 @@ class GooglePlaceModel {
       address: json['address']?.toString().trim() ?? 'Adres paylaşılmadı',
       latitude: (json['lat'] as num).toDouble(),
       longitude: (json['lng'] as num).toDouble(),
+      photoReference: json['photoReference']?.toString().trim(),
     );
   }
 }

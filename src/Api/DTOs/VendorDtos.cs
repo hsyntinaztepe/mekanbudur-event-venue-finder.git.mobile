@@ -15,6 +15,7 @@ namespace MekanBudur.Api.DTOs
         string? WorkingHours,
         string? PhotoUrls,
         string? ServiceCategoriesCsv,
+        string? SuitableForCsv,
         // Geo data
         double? VenueLatitude,
         double? VenueLongitude,
@@ -36,6 +37,7 @@ namespace MekanBudur.Api.DTOs
         string? WorkingHours,
         string? PhotoUrls,
         string? ServiceCategoriesCsv,
+        string? SuitableForCsv,
         bool IsVerified,
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
@@ -43,6 +45,34 @@ namespace MekanBudur.Api.DTOs
         double? VenueLatitude,
         double? VenueLongitude,
         double? Radius,
-        string? VenueAddressLabel
+        string? VenueAddressLabel,
+        double RatingAverage,
+        int RatingsCount
+    );
+
+    public record VendorRatingRequest(
+        [property: Range(1, 5)] int Rating,
+        string? Comment
+    );
+
+    public record VendorRatingResponse(
+        Guid Id,
+        Guid VendorUserId,
+        Guid MemberUserId,
+        int Rating,
+        string? Comment,
+        DateTime CreatedAtUtc,
+        DateTime? UpdatedAtUtc,
+        string MemberDisplayName
+    );
+
+    public record VendorRatingSummaryResponse(
+        double AverageRating,
+        int RatingsCount
+    );
+
+    public record VendorRatingListResponse(
+        VendorRatingSummaryResponse Summary,
+        List<VendorRatingResponse> Ratings
     );
 }

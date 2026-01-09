@@ -221,6 +221,37 @@ namespace MekanBudur.Api.Services
                 db.EventListings.AddRange(listings);
                 db.SaveChanges();
 
+                if (!db.VendorRatings.Any())
+                {
+                    db.VendorRatings.AddRange(
+                        new VendorRating
+                        {
+                            VendorUserId = vendor.Id,
+                            MemberUserId = users[0].Id,
+                            Rating = 5,
+                            Comment = "Mekan ve ekip harikaydı, herkese öneriyoruz.",
+                            CreatedAtUtc = DateTime.UtcNow.AddDays(-15)
+                        },
+                        new VendorRating
+                        {
+                            VendorUserId = vendor.Id,
+                            MemberUserId = users[1].Id,
+                            Rating = 4,
+                            Comment = "İkramlar çok iyiydi, iletişim hızlıydı.",
+                            CreatedAtUtc = DateTime.UtcNow.AddDays(-10)
+                        },
+                        new VendorRating
+                        {
+                            VendorUserId = vendor.Id,
+                            MemberUserId = users[2].Id,
+                            Rating = 5,
+                            Comment = "Fotoğraf ve mekan süslemeleri beklentimizin üzerindeydi.",
+                            CreatedAtUtc = DateTime.UtcNow.AddDays(-7)
+                        }
+                    );
+                    db.SaveChanges();
+                }
+
                 // İlanlar için Geo bilgilerini ekle
                 // İstanbul, Beşiktaş (Listing 1)
                 await AddGeoAsync(geo, listing1.Id, 41.0419, 29.0072, 5000, "İstanbul, Beşiktaş");

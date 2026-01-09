@@ -119,18 +119,18 @@ flutter pub get
 flutter run
 ```
 
-Not: Android emulatorunde API'ye baglanmak icin `api_client.dart` dosyasindaki base URL `http://10.0.2.2:8081/api` olarak ayarlidir.
+Not: Android emulatorunde API'ye baglanmak icin `api_client.dart` dosyasindaki base URL `http://10.0.2.2:8084/api` olarak ayarlidir.
 
 ## Servis Adresleri
 
 | Servis | Adres | Aciklama |
 |--------|-------|----------|
-| API | http://localhost:8081 | Ana API servisi |
-| API Swagger | http://localhost:8081/swagger | API dokumantasyonu |
-| Geo API | http://localhost:8082 | Konum servisi |
-| pgAdmin | http://localhost:5050 | Veritabani yonetimi |
-| PostgreSQL (Ana) | localhost:5432 | Ana veritabani |
-| PostgreSQL (Geo) | localhost:5433 | Geo veritabani |
+| API | http://localhost:8084 | Ana API servisi |
+| API Swagger | http://localhost:8084/swagger | API dokumantasyonu |
+| Geo API | http://localhost:8083 | Konum servisi |
+| pgAdmin | http://localhost:5051 | Veritabani yonetimi |
+| PostgreSQL (Ana) | localhost:5434 | Ana veritabani |
+| PostgreSQL (Geo) | localhost:5436 | Geo veritabani |
 
 ## Demo Hesaplar
 

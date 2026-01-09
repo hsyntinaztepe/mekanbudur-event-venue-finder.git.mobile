@@ -5,27 +5,39 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/api_client.dart';
+import '../../../core/public_url.dart';
+import '../../../core/geo_api_client.dart';
 import '../../../data/models/listing_model.dart';
 import '../../../data/models/google_place_category.dart';
 import '../../../data/models/google_place_model.dart';
 import '../../../data/models/public_vendor_model.dart';
 import '../../../data/models/place_model.dart';
+import '../../../data/models/embedded_place_model.dart';
 import '../../providers/listing_provider.dart';
 import '../../providers/google_places_provider.dart';
 import '../../providers/place_provider.dart';
 import '../../providers/vendor_provider.dart';
+import '../../providers/embedded_places_provider.dart';
 
 const Map<String, IconData> _googleCategoryIcons = {
   GooglePlaceCategory.weddingHalls: Icons.celebration_rounded,
   GooglePlaceCategory.bakeries: Icons.cake_rounded,
   GooglePlaceCategory.photographers: Icons.camera_alt_rounded,
+  GooglePlaceCategory.florists: Icons.local_florist_rounded,
+  GooglePlaceCategory.music: Icons.music_note_rounded,
 };
 
 const int _googlePlacesPreviewLimit = 6;
 
 class SavedPlacesScreen extends StatefulWidget {
-  const SavedPlacesScreen({super.key});
+  const SavedPlacesScreen({
+    super.key,
+    this.initialRefType,
+    this.initialGoogleCategory,
+  });
+
+  final String? initialRefType;
+  final String? initialGoogleCategory;
 
   @override
   State<SavedPlacesScreen> createState() => _SavedPlacesScreenState();
@@ -51,12 +63,25 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     final listingProvider = context.read<ListingProvider>();
     final googlePlacesProvider = context.read<GooglePlacesProvider>();
     final vendorProvider = context.read<VendorProvider>();
+    final embeddedPlacesProvider = context.read<EmbeddedPlacesProvider>();
 
-    await placeProvider.fetchPlaces();
+    final desiredRefType = (widget.initialRefType?.trim().isNotEmpty == true)
+        ? widget.initialRefType!.trim()
+        : placeProvider.currentRefType;
+
+    await placeProvider.fetchPlaces(
+        refType: desiredRefType, forceRefresh: true);
     // Ensure listings are available for cross-linking.
     await listingProvider.fetchAllListings();
     await googlePlacesProvider.ensureInitialized();
+
+    final desiredCategory = widget.initialGoogleCategory?.trim();
+    if (desiredCategory != null && desiredCategory.isNotEmpty) {
+      await googlePlacesProvider.switchCategory(desiredCategory);
+    }
+
     await vendorProvider.fetchPublicVendors();
+    await embeddedPlacesProvider.ensureLoaded();
   }
 
   Future<void> _onPlaceTypeSelected(String target) async {
@@ -75,6 +100,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     final listingProvider = context.watch<ListingProvider>();
     final googlePlacesProvider = context.watch<GooglePlacesProvider>();
     final vendorProvider = context.watch<VendorProvider>();
+    final embeddedPlacesProvider = context.watch<EmbeddedPlacesProvider>();
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -115,6 +141,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                     listingProvider,
                     googlePlacesProvider,
                     vendorProvider,
+                    embeddedPlacesProvider,
                     theme,
                   ),
                 ),
@@ -131,17 +158,40 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     ListingProvider listingProvider,
     GooglePlacesProvider googleProvider,
     VendorProvider vendorProvider,
+    EmbeddedPlacesProvider embeddedPlacesProvider,
     ThemeData theme,
   ) {
     final isVendorSelected = provider.currentRefType == PlaceRefType.vendor;
     final isListingSelected = provider.currentRefType == PlaceRefType.listing;
     final visiblePlaces = _filterPlacesForDisplay(provider, listingProvider);
+    final vendorPlaces = visiblePlaces
+        .where((place) => place.refType == PlaceRefType.vendor)
+        .toList(growable: false);
+    final Map<String, PlaceModel> vendorPlacesById = {
+      for (final place in vendorPlaces) place.refId: place,
+    };
+    final publicVendors =
+        vendorProvider.publicVendorsById.values.toList(growable: false);
     final listingMarkers = _filterListingsForMap(provider, listingProvider);
+    final embeddedSection = isVendorSelected
+        ? _buildEmbeddedPlacesShowcase(
+            provider: embeddedPlacesProvider,
+            googleProvider: googleProvider,
+            theme: theme,
+          )
+        : const <Widget>[];
     final memberVendorSection = isVendorSelected
         ? _buildMemberVendorPlacesSection(
-            places: visiblePlaces,
+            places: vendorPlaces,
             vendorProvider: vendorProvider,
             theme: theme,
+          )
+        : const <Widget>[];
+    final publicVendorSection = isVendorSelected
+        ? _buildPublicVendorShowcaseSection(
+            vendorProvider: vendorProvider,
+            theme: theme,
+            vendorPlacesById: vendorPlacesById,
           )
         : const <Widget>[];
     final cityDistrictMap = isListingSelected
@@ -156,6 +206,9 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         googleProvider,
         visiblePlaces,
         listingMarkers,
+        vendorPlacesById,
+        publicVendors,
+        embeddedPlacesProvider.places,
       ),
       if (isListingSelected && cityDistrictMap.isNotEmpty) ...[
         const SizedBox(height: 12),
@@ -164,9 +217,11 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
       const SizedBox(height: 18),
       if (isVendorSelected) ...[
         ...memberVendorSection,
-        const SizedBox(height: 18),
-      ],
-      if (isVendorSelected) ...[
+        if (memberVendorSection.isNotEmpty) const SizedBox(height: 18),
+        ...publicVendorSection,
+        if (publicVendorSection.isNotEmpty) const SizedBox(height: 18),
+        ...embeddedSection,
+        if (embeddedSection.isNotEmpty) const SizedBox(height: 18),
         _buildGooglePlacesSection(googleProvider),
         const SizedBox(height: 18),
       ],
@@ -250,20 +305,25 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     required VendorProvider vendorProvider,
     required ThemeData theme,
   }) {
-    final vendorPlaces = places
-        .where((place) => place.refType == PlaceRefType.vendor)
-        .toList(growable: false);
-
-    if (vendorPlaces.isEmpty) {
-      return const <Widget>[];
-    }
-
     final widgets = <Widget>[
-      const _SectionHeader(text: 'Üye mekanlar'),
+      const _SectionHeader(text: 'Kaydedilen üye mekanlar'),
       const SizedBox(height: 10),
     ];
 
-    for (final place in vendorPlaces) {
+    if (places.isEmpty) {
+      widgets.add(
+        Text(
+          'Henüz kaydedilen üye mekan konumu yok.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+      return widgets;
+    }
+
+    for (var i = 0; i < places.length; i++) {
+      final place = places[i];
       final vendor = vendorProvider.publicVendorsById[place.refId];
       widgets.add(
         _MemberVendorPlaceCard(
@@ -273,9 +333,179 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
           onShowOnMap: () => _focusOnPlace(place),
         ),
       );
-      widgets.add(const SizedBox(height: 14));
+      if (i != places.length - 1) {
+        widgets.add(const SizedBox(height: 14));
+      }
     }
-    widgets.removeLast();
+    return widgets;
+  }
+
+  List<Widget> _buildPublicVendorShowcaseSection({
+    required VendorProvider vendorProvider,
+    required ThemeData theme,
+    required Map<String, PlaceModel> vendorPlacesById,
+  }) {
+    final widgets = <Widget>[
+      const _SectionHeader(text: 'Tüm üye mekanlar'),
+      const SizedBox(height: 10),
+    ];
+
+    final vendors = vendorProvider.publicVendorsById.values
+        .toList(growable: false)
+      ..sort((a, b) => a.companyName.compareTo(b.companyName));
+
+    if (vendorProvider.isPublicVendorsLoading && vendors.isEmpty) {
+      widgets.add(const Center(child: CircularProgressIndicator()));
+      return widgets;
+    }
+
+    if (vendors.isEmpty) {
+      final error = vendorProvider.publicVendorsError;
+      widgets.add(
+        Text(
+          error == null || error.trim().isEmpty
+              ? 'Henüz gösterilecek üye mekan yok.'
+              : 'Üye mekanlar yüklenemedi: ${error.trim()}',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+      if (error != null && error.trim().isNotEmpty) {
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => vendorProvider.fetchPublicVendors(
+                forceRefresh: true,
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Tekrar dene'),
+            ),
+          ),
+        );
+      }
+      return widgets;
+    }
+
+    for (final vendor in vendors) {
+      final place = vendorPlacesById[vendor.userId];
+      final canFocus = place != null ||
+          (vendor.latitude != null && vendor.longitude != null);
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _PublicVendorShowcaseCard(
+            vendor: vendor,
+            theme: theme,
+            onShowOnMap: canFocus
+                ? () {
+                    if (place != null) {
+                      _focusOnPlace(place);
+                    } else {
+                      _focusOnVendorCoordinates(vendor);
+                    }
+                  }
+                : null,
+            onVisit: () => context.push('/vendor/${vendor.userId}'),
+          ),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  List<Widget> _buildEmbeddedPlacesShowcase({
+    required EmbeddedPlacesProvider provider,
+    required GooglePlacesProvider googleProvider,
+    required ThemeData theme,
+  }) {
+    final widgets = <Widget>[
+      const _SectionHeader(text: 'Çevredeki Mekanlar'),
+      const SizedBox(height: 10),
+    ];
+
+    if (provider.isLoading && provider.places.isEmpty) {
+      widgets.add(const Center(child: CircularProgressIndicator()));
+      return widgets;
+    }
+
+    final error = provider.error?.trim();
+    if (error != null && error.isNotEmpty && provider.places.isEmpty) {
+      widgets.add(
+        Text(
+          'Çevredeki mekanlar yüklenemedi: $error',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => provider.refresh(),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Yeniden dene'),
+          ),
+        ),
+      );
+      return widgets;
+    }
+
+    if (provider.places.isEmpty) {
+      widgets.add(
+        Text(
+          'Hemen yakında öne çıkan mekan listesi hazırlandığında burada gözükecek.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+      return widgets;
+    }
+
+    final visiblePlaces = provider.places.length > 16
+        ? provider.places.take(16).toList(growable: false)
+        : provider.places;
+
+    widgets.add(
+      SizedBox(
+        height: 188,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: visiblePlaces.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (context, index) {
+            final place = visiblePlaces[index];
+            final categoryLabel = _embeddedCategoryLabel(place.category);
+            final badgeColor = _embeddedCategoryColor(place.category, theme);
+            final googleCategory =
+                _mapEmbeddedCategoryToGoogleCategory(place.category);
+            return _EmbeddedPlaceCard(
+              place: place,
+              categoryLabel: categoryLabel,
+              badgeColor: badgeColor,
+              onFocus: place.hasCoordinates
+                  ? () => _focusOnEmbeddedPlace(place)
+                  : null,
+              onShowCategory: googleCategory == null
+                  ? null
+                  : () => googleProvider.switchCategory(googleCategory),
+            );
+          },
+        ),
+      ),
+    );
+
+    if (provider.isLoading) {
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(const LinearProgressIndicator(minHeight: 3));
+    }
+
     return widgets;
   }
 
@@ -292,9 +522,23 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     _mapController.move(target, 14);
   }
 
+  void _focusOnVendorCoordinates(PublicVendor vendor) {
+    if (vendor.latitude == null || vendor.longitude == null) return;
+    final target = LatLng(vendor.latitude!, vendor.longitude!);
+    setState(() => _activeMarkerId = 'public-vendor-${vendor.userId}');
+    _mapController.move(target, 14.2);
+  }
+
   void _focusOnGooglePlace(GooglePlaceModel place) {
     final target = LatLng(place.latitude, place.longitude);
     _mapController.move(target, 14.2);
+  }
+
+  void _focusOnEmbeddedPlace(EmbeddedPlace place) {
+    if (!place.hasCoordinates) return;
+    final target = LatLng(place.latitude!, place.longitude!);
+    setState(() => _activeMarkerId = 'embedded-${place.key}');
+    _mapController.move(target, 14.4);
   }
 
   void _focusOnListing(Listing listing) {
@@ -442,16 +686,20 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     InputDecoration decoration(String label) {
       return InputDecoration(
         labelText: label,
-        labelStyle: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+        labelStyle: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
+        fillColor: theme.colorScheme.surfaceContainerHighest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white24),
+          borderSide:
+              BorderSide(color: theme.colorScheme.outline.withOpacity(0.4)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white24),
+          borderSide:
+              BorderSide(color: theme.colorScheme.outline.withOpacity(0.4)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -474,16 +722,16 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         DropdownButtonFormField<String?>(
           value: _selectedCity,
           decoration: decoration('Şehir'),
-          dropdownColor: const Color(0xFF151B26),
+          dropdownColor: theme.colorScheme.surface,
           items: [
             const DropdownMenuItem<String?>(
               value: null,
-              child: Text('Tümü', style: TextStyle(color: Colors.white)),
+              child: Text('Tümü'),
             ),
             ...cities.map(
               (city) => DropdownMenuItem<String?>(
                 value: city,
-                child: Text(city, style: const TextStyle(color: Colors.white)),
+                child: Text(city),
               ),
             ),
           ],
@@ -493,23 +741,22 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               _selectedDistrict = null;
             });
           },
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: theme.colorScheme.onSurface),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String?>(
           value: _selectedDistrict,
           decoration: decoration('İlçe'),
-          dropdownColor: const Color(0xFF151B26),
+          dropdownColor: theme.colorScheme.surface,
           items: [
             const DropdownMenuItem<String?>(
               value: null,
-              child: Text('Tümü', style: TextStyle(color: Colors.white)),
+              child: Text('Tümü'),
             ),
             ...currentDistricts.map(
               (district) => DropdownMenuItem<String?>(
                 value: district,
-                child:
-                    Text(district, style: const TextStyle(color: Colors.white)),
+                child: Text(district),
               ),
             ),
           ],
@@ -518,7 +765,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               _selectedDistrict = value;
             });
           },
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: theme.colorScheme.onSurface),
         ),
         if (hasSelection) ...[
           const SizedBox(height: 8),
@@ -545,7 +792,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                   ? summaryBuffer.toString()
                   : 'Şehir ve ilçe seçmek için açın.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -568,8 +815,8 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF0F121B),
-        border: Border.all(color: Colors.white10),
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,7 +834,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               IconButton(
                 tooltip: toggleTooltip,
                 onPressed: _toggleLocationFilterExpansion,
-                icon: Icon(icon, color: Colors.white),
+                icon: Icon(icon, color: theme.colorScheme.onSurface),
               ),
             ],
           ),
@@ -611,11 +858,29 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     GooglePlacesProvider googleProvider,
     List<PlaceModel> places,
     List<Listing> listingsWithCoords,
+    Map<String, PlaceModel> vendorPlacesById,
+    List<PublicVendor> publicVendors,
+    List<EmbeddedPlace> embeddedPlaces,
   ) {
     final isVendorSelected = provider.currentRefType == PlaceRefType.vendor;
     final isListingSelected = provider.currentRefType == PlaceRefType.listing;
     final googlePlaces =
         isVendorSelected ? googleProvider.places : const <GooglePlaceModel>[];
+    final vendorLookup = {
+      for (final vendor in publicVendors) vendor.userId: vendor,
+    };
+    final extraVendorCoords = publicVendors
+        .where((vendor) =>
+            vendor.latitude != null &&
+            vendor.longitude != null &&
+            !vendorPlacesById.containsKey(vendor.userId))
+        .map((vendor) => LatLng(vendor.latitude!, vendor.longitude!))
+        .toList(growable: false);
+    final curatedPlaces =
+        isVendorSelected ? embeddedPlaces : const <EmbeddedPlace>[];
+    final curatedPlacesWithCoords = curatedPlaces
+        .where((place) => place.latitude != null && place.longitude != null)
+        .toList(growable: false);
 
     final List<LatLng> aggregatePoints = [
       ...places.map((p) => LatLng(p.latitude, p.longitude)),
@@ -625,6 +890,11 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         ),
       if (isVendorSelected)
         ...googlePlaces.map((g) => LatLng(g.latitude, g.longitude)),
+      if (isVendorSelected)
+        ...curatedPlacesWithCoords.map(
+          (place) => LatLng(place.latitude!, place.longitude!),
+        ),
+      if (isVendorSelected) ...extraVendorCoords,
     ];
 
     final hasAnyMarkers = aggregatePoints.isNotEmpty;
@@ -642,13 +912,12 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
             ))
         .toList();
 
-    final vendorById = context.read<VendorProvider>().publicVendorsById;
     final savedMarkers = places.map((place) {
       final listing = place.refType == PlaceRefType.listing
           ? _resolveListing(listingProvider, place.refId)
           : null;
       final vendorTitle = place.refType == PlaceRefType.vendor
-          ? vendorById[place.refId]?.companyName
+          ? vendorLookup[place.refId]?.companyName
           : null;
       final markerId = 'saved-${place.id}';
       final isActive = _activeMarkerId == markerId;
@@ -720,6 +989,117 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         ),
       );
     }).toList();
+    final vendorIdsWithSavedMarkers = vendorPlacesById.keys.toSet();
+    final publicVendorMarkers = isVendorSelected
+        ? publicVendors
+            .where((vendor) =>
+                vendor.latitude != null &&
+                vendor.longitude != null &&
+                !vendorIdsWithSavedMarkers.contains(vendor.userId))
+            .map((vendor) {
+            final markerId = 'public-vendor-${vendor.userId}';
+            final isActive = _activeMarkerId == markerId;
+            final photoUrl = vendor.photoUrlList.isNotEmpty
+                ? normalizePublicUrl(vendor.photoUrlList.first)
+                : null;
+            return Marker(
+              point: LatLng(vendor.latitude!, vendor.longitude!),
+              width: 150,
+              height: 86,
+              alignment: Alignment.topCenter,
+              child: GestureDetector(
+                onTap: () {
+                  _handleMarkerTap(
+                    markerId,
+                    () => _showVendorQuickSheet(vendor),
+                  );
+                },
+                child: AnimatedScale(
+                  scale: isActive ? 1.15 : 1.0,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? theme.colorScheme.primary
+                              : Colors.white.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isActive
+                                      ? theme.colorScheme.primary
+                                      : Colors.black)
+                                  .withOpacity(isActive ? 0.35 : 0.15),
+                              blurRadius: isActive ? 16 : 8,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (photoUrl != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  photoUrl,
+                                  width: 26,
+                                  height: 26,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 26,
+                                    height: 26,
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.storefront_rounded,
+                                      size: 16,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            SizedBox(
+                              width: 90,
+                              child: Text(
+                                vendor.companyName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color:
+                                      isActive ? Colors.white : Colors.black87,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Icon(
+                        Icons.workspace_premium_rounded,
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : Colors.deepPurpleAccent,
+                        size: isActive ? 34 : 28,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList()
+        : const <Marker>[];
     final googleMarkers = googlePlaces.map((place) {
       final markerId =
           'google-${place.name}-${place.latitude}-${place.longitude}';
@@ -789,6 +1169,78 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         ),
       );
     }).toList();
+
+    final embeddedMarkers = isVendorSelected
+        ? curatedPlacesWithCoords.map((place) {
+            final markerId = 'embedded-${place.key}';
+            final isActive = _activeMarkerId == markerId;
+            final badgeColor = _embeddedCategoryColor(place.category, theme);
+            return Marker(
+              point: LatLng(place.latitude!, place.longitude!),
+              width: 150,
+              height: 84,
+              alignment: Alignment.topCenter,
+              child: GestureDetector(
+                onTap: () {
+                  _handleMarkerTap(
+                    markerId,
+                    () => _showEmbeddedPlaceDetails(place),
+                  );
+                },
+                child: AnimatedScale(
+                  scale: isActive ? 1.16 : 1.0,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF101828).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: badgeColor.withOpacity(isActive ? 0.9 : 0.5),
+                            width: isActive ? 2 : 1,
+                          ),
+                          boxShadow: isActive
+                              ? [
+                                  BoxShadow(
+                                    color: badgeColor.withOpacity(0.4),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Text(
+                          place.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        color: badgeColor,
+                        size: isActive ? 34 : 28,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList()
+        : const <Marker>[];
 
     final listingMarkers = isListingSelected
         ? listingsWithCoords.map((listing) {
@@ -871,12 +1323,13 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     final secondaryLabel = isVendorSelected
         ? 'Google ${GooglePlaceCategory.labelFor(googleProvider.activeCategory)}'
         : 'İlan lokasyonu';
+    final curatedCount = isVendorSelected ? curatedPlacesWithCoords.length : 0;
 
     return Container(
       height: mapHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -890,7 +1343,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
         children: [
           FlutterMap(
             key: ValueKey(
-              'map-${provider.currentRefType}-${places.length}-${googleProvider.activeCategory}-${googlePlaces.length}',
+              'map-${provider.currentRefType}-${places.length}-${googleProvider.activeCategory}-${googlePlaces.length}-${publicVendors.length}-${embeddedPlaces.length}',
             ),
             mapController: _mapController,
             options: MapOptions(
@@ -909,6 +1362,10 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               ),
               if (circles.isNotEmpty) CircleLayer(circles: circles),
               if (savedMarkers.isNotEmpty) MarkerLayer(markers: savedMarkers),
+              if (publicVendorMarkers.isNotEmpty)
+                MarkerLayer(markers: publicVendorMarkers),
+              if (embeddedMarkers.isNotEmpty)
+                MarkerLayer(markers: embeddedMarkers),
               if (listingMarkers.isNotEmpty)
                 MarkerLayer(markers: listingMarkers),
               if (googleMarkers.isNotEmpty) MarkerLayer(markers: googleMarkers),
@@ -942,6 +1399,8 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                   : 'İlan',
               googleCount: secondaryCount,
               googleLabel: secondaryLabel,
+              tertiaryCount: isVendorSelected ? curatedCount : null,
+              tertiaryLabel: isVendorSelected ? 'Çevredeki öneri' : null,
             ),
           ),
         ],
@@ -954,6 +1413,51 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
       provider: provider,
       onFocusOnMap: _focusOnGooglePlace,
     );
+  }
+
+  String _embeddedCategoryLabel(String raw) {
+    switch (raw.toLowerCase()) {
+      case 'wedding':
+        return 'Düğün Salonu';
+      case 'photographer':
+        return 'Fotoğrafçı';
+      case 'bakery':
+        return 'Pastane';
+      case 'florist':
+        return 'Çiçekçi';
+      default:
+        return raw;
+    }
+  }
+
+  Color _embeddedCategoryColor(String raw, ThemeData theme) {
+    switch (raw.toLowerCase()) {
+      case 'wedding':
+        return Colors.pinkAccent;
+      case 'photographer':
+        return Colors.lightBlueAccent;
+      case 'bakery':
+        return Colors.lightGreen;
+      case 'florist':
+        return const Color(0xFFF4B400);
+      default:
+        return theme.colorScheme.primary;
+    }
+  }
+
+  String? _mapEmbeddedCategoryToGoogleCategory(String raw) {
+    switch (raw.toLowerCase()) {
+      case 'wedding':
+        return GooglePlaceCategory.weddingHalls;
+      case 'photographer':
+        return GooglePlaceCategory.photographers;
+      case 'bakery':
+        return GooglePlaceCategory.bakeries;
+      case 'florist':
+        return GooglePlaceCategory.florists;
+      default:
+        return null;
+    }
   }
 
   LatLng _calculateLatLngCenter(List<LatLng> points) {
@@ -988,7 +1492,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
 
     await showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151A24),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1032,14 +1536,18 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                  color: Colors.white70,
+                                  color: Theme.of(ctx)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                           )
                         else
                           Text(
                             'Lat ${place.latitude.toStringAsFixed(4)} • Lng ${place.longitude.toStringAsFixed(4)}',
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                  color: Colors.white70,
+                                  color: Theme.of(ctx)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                           ),
                       ],
@@ -1081,10 +1589,264 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     );
   }
 
+  Future<void> _showVendorQuickSheet(PublicVendor vendor) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final photoUrl = vendor.photoUrlList.isNotEmpty
+            ? normalizePublicUrl(vendor.photoUrlList.first)
+            : null;
+        final categories = vendor.categoryList.take(3).join(', ');
+        final hasCoords = vendor.latitude != null && vendor.longitude != null;
+        final address = vendor.addressLabel?.trim();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: photoUrl == null
+                        ? Container(
+                            width: 64,
+                            height: 64,
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.storefront_rounded,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                        : Image.network(
+                            photoUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 64,
+                              height: 64,
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.storefront_rounded,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vendor.companyName,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _VendorRatingRow(
+                          averageRating: vendor.averageRating,
+                          ratingCount: vendor.ratingCount,
+                        ),
+                        if (address != null && address.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            address,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (vendor.description?.trim().isNotEmpty == true) ...[
+                Text(
+                  vendor.description!.trim(),
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (categories.isNotEmpty) ...[
+                Text(
+                  categories,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: hasCoords
+                        ? () {
+                            Navigator.of(ctx).pop();
+                            _focusOnVendorCoordinates(vendor);
+                          }
+                        : null,
+                    icon: const Icon(Icons.map_rounded),
+                    label: const Text('Haritada Göster'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      context.push('/vendor/${vendor.userId}');
+                    },
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Detaylar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showEmbeddedPlaceDetails(EmbeddedPlace place) async {
+    final googleProvider = context.read<GooglePlacesProvider>();
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final address = place.address?.trim();
+        final categoryLabel = _embeddedCategoryLabel(place.category);
+        final accent = _embeddedCategoryColor(place.category, theme);
+        final googleCategory =
+            _mapEmbeddedCategoryToGoogleCategory(place.category);
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.asset(
+                    place.assetPath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                place.name,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  categoryLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (address != null && address.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  address,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: place.hasCoordinates
+                        ? () {
+                            Navigator.of(ctx).pop();
+                            _focusOnEmbeddedPlace(place);
+                          }
+                        : null,
+                    icon: const Icon(Icons.map_rounded),
+                    label: const Text('Haritada Odakla'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: address == null || address.isEmpty
+                        ? null
+                        : () {
+                            Clipboard.setData(ClipboardData(text: address));
+                            Navigator.of(ctx).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Adres panoya kopyalandı'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.copy_rounded),
+                    label: const Text('Adresi Kopyala'),
+                  ),
+                  if (googleCategory != null)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        googleProvider.switchCategory(googleCategory);
+                      },
+                      icon: const Icon(Icons.layers_rounded),
+                      label: const Text('Google önerilerini göster'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showGooglePlaceDetails(GooglePlaceModel place) async {
     await showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151A24),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1119,10 +1881,10 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                         const SizedBox(height: 4),
                         Text(
                           place.address,
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Colors.white70),
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(ctx).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
@@ -1132,10 +1894,9 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               const SizedBox(height: 16),
               Text(
                 'Lat ${place.latitude.toStringAsFixed(4)} • Lng ${place.longitude.toStringAsFixed(4)}',
-                style: Theme.of(ctx)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.white70),
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -1177,7 +1938,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   Future<void> _showListingLocationDetails(Listing listing) async {
     await showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF151A24),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1213,10 +1974,10 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
                           listing.addressLabel?.isNotEmpty == true
                               ? listing.addressLabel!
                               : listing.location ?? 'Adres belirtilmemiş',
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Colors.white70),
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(ctx).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
@@ -1226,10 +1987,9 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
               const SizedBox(height: 16),
               Text(
                 'Lat ${listing.latitude?.toStringAsFixed(4) ?? '-'} • Lng ${listing.longitude?.toStringAsFixed(4) ?? '-'}',
-                style: Theme.of(ctx)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.white70),
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -1353,12 +2113,8 @@ class _PlaceCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1F2233), Color(0xFF0F121B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: Colors.white12),
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.25),
@@ -1401,7 +2157,7 @@ class _PlaceCard extends StatelessWidget {
                     Text(
                       secondaryText,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1509,6 +2265,8 @@ class _MemberVendorPlaceCard extends StatelessWidget {
         details.isNotEmpty ? details.join(' • ') : 'Bilgi bulunamadı';
 
     final photoUrl = _resolveVendorPhotoUrl(vendor);
+    final averageRating = vendor?.averageRating;
+    final ratingCount = vendor?.ratingCount ?? 0;
 
     return InkWell(
       onTap: onShowOnMap,
@@ -1517,7 +2275,7 @@ class _MemberVendorPlaceCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
         ),
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -1532,8 +2290,7 @@ class _MemberVendorPlaceCard extends StatelessWidget {
                     ? Center(
                         child: Icon(
                           Icons.storefront_rounded,
-                          color:
-                              theme.colorScheme.onSurfaceVariant.withOpacity(
+                          color: theme.colorScheme.onSurfaceVariant.withOpacity(
                             0.7,
                           ),
                         ),
@@ -1567,12 +2324,17 @@ class _MemberVendorPlaceCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  _VendorRatingRow(
+                    averageRating: averageRating,
+                    ratingCount: ratingCount,
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -1595,16 +2357,201 @@ class _MemberVendorPlaceCard extends StatelessWidget {
     if (vendor.photoUrlList.isEmpty) return null;
     final raw = vendor.photoUrlList.first.trim();
     if (raw.isEmpty) return null;
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
 
-    // ApiClient.baseUrl = http://10.0.2.2:8081/api
-    // Static files are served from the host root, e.g. http://10.0.2.2:8081/uploads/...
-    final api = Uri.tryParse(ApiClient.baseUrl);
-    if (api == null) return raw;
+    // Normalize both relative URLs and stale absolute URLs (e.g. wrong port).
+    return normalizePublicUrl(raw);
+  }
+}
 
-    final root = api.replace(path: '', query: null, fragment: null);
-    final normalized = raw.startsWith('/') ? raw : '/$raw';
-    return root.toString().replaceAll(RegExp(r'/$'), '') + normalized;
+class _PublicVendorShowcaseCard extends StatelessWidget {
+  const _PublicVendorShowcaseCard({
+    required this.vendor,
+    required this.theme,
+    required this.onVisit,
+    this.onShowOnMap,
+  });
+
+  final PublicVendor vendor;
+  final ThemeData theme;
+  final VoidCallback onVisit;
+  final VoidCallback? onShowOnMap;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = vendor.photoUrlList.isNotEmpty
+        ? normalizePublicUrl(vendor.photoUrlList.first)
+        : null;
+    final categories = vendor.categoryList.take(3).join(' • ');
+    final address = vendor.addressLabel?.trim();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: photoUrl == null
+                ? Container(
+                    width: 72,
+                    height: 72,
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  )
+                : Image.network(
+                    photoUrl,
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 72,
+                      height: 72,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.storefront_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        vendor.companyName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (vendor.isVerified)
+                      Icon(
+                        Icons.verified_rounded,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                _VendorRatingRow(
+                  averageRating: vendor.averageRating,
+                  ratingCount: vendor.ratingCount,
+                ),
+                if (categories.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    categories,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (address != null && address.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    address,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: onShowOnMap,
+                      icon: const Icon(Icons.map_rounded),
+                      label: const Text('Haritada'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onVisit,
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: const Text('Detay'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorRatingRow extends StatelessWidget {
+  const _VendorRatingRow({
+    required this.averageRating,
+    required this.ratingCount,
+  });
+
+  final double? averageRating;
+  final int ratingCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasRating = averageRating != null && ratingCount > 0;
+    final double normalized = hasRating ? averageRating!.clamp(0, 5) : 0;
+    final int fullStars = hasRating ? normalized.floor() : 0;
+    final bool hasHalfStar =
+        hasRating && (normalized - fullStars) >= 0.5 && fullStars < 5;
+
+    Color activeColor = Colors.amber.shade700;
+    Color inactiveColor =
+        theme.colorScheme.onSurfaceVariant.withOpacity(hasRating ? 0.5 : 0.35);
+
+    Widget buildIcon(int index) {
+      IconData icon;
+      if (!hasRating) {
+        icon = Icons.star_border_rounded;
+      } else if (index < fullStars) {
+        icon = Icons.star_rounded;
+      } else if (hasHalfStar && index == fullStars) {
+        icon = Icons.star_half_rounded;
+      } else {
+        icon = Icons.star_border_rounded;
+      }
+      final color = hasRating ? activeColor : inactiveColor;
+      return Icon(icon, size: 16, color: color);
+    }
+
+    return Row(
+      children: [
+        for (int i = 0; i < 5; i++) buildIcon(i),
+        const SizedBox(width: 6),
+        Text(
+          hasRating
+              ? '${normalized.toStringAsFixed(1)} ($ratingCount)'
+              : 'Henüz puan yok',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1616,20 +2563,23 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(color: Colors.white10),
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.white70),
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -1664,8 +2614,8 @@ class _EmptyView extends StatelessWidget {
             Text(
               'Yeni konum eklemek için geo servisini kullanan işlemlerden birini tamamlayabilirsiniz.',
               textAlign: TextAlign.center,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -1699,7 +2649,8 @@ class _ErrorView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -1727,8 +2678,8 @@ class _FilteredEmptyNotice extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withOpacity(0.04),
-        border: Border.all(color: Colors.white10),
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1740,7 +2691,8 @@ class _FilteredEmptyNotice extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Farklı bir şehir veya ilçe seçebilir ya da filtreleri temizleyebilirsiniz.',
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Align(
@@ -1792,21 +2744,26 @@ class _MapStatsBadge extends StatelessWidget {
     required this.savedLabel,
     required this.googleCount,
     required this.googleLabel,
+    this.tertiaryCount,
+    this.tertiaryLabel,
   });
 
   final int savedCount;
   final String savedLabel;
   final int googleCount;
   final String googleLabel;
+  final int? tertiaryCount;
+  final String? tertiaryLabel;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: theme.colorScheme.surface.withOpacity(0.92),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1814,17 +2771,31 @@ class _MapStatsBadge extends StatelessWidget {
         children: [
           Text(
             '$savedCount kayıtlı $savedLabel',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '$googleCount $googleLabel',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
             textAlign: TextAlign.right,
           ),
+          if (tertiaryCount != null && tertiaryLabel != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              '$tertiaryCount $tertiaryLabel',
+              style: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ],
         ],
       ),
     );
@@ -1839,21 +2810,164 @@ class _MapExpandButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final label = isExpanded ? 'Haritayı daralt' : 'Haritayı genişlet';
     final icon = isExpanded ? Icons.fullscreen_exit : Icons.fullscreen;
 
     return Tooltip(
       message: label,
       child: Material(
-        color: Colors.black.withOpacity(0.55),
+        color: theme.colorScheme.surface.withOpacity(0.92),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onToggle,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(8),
-            child: Icon(icon, color: Colors.white, size: 20),
+            child: Icon(icon, color: theme.colorScheme.onSurface, size: 20),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmbeddedPlaceCard extends StatelessWidget {
+  const _EmbeddedPlaceCard({
+    required this.place,
+    required this.categoryLabel,
+    required this.badgeColor,
+    this.onFocus,
+    this.onShowCategory,
+  });
+
+  final EmbeddedPlace place;
+  final String categoryLabel;
+  final Color badgeColor;
+  final VoidCallback? onFocus;
+  final VoidCallback? onShowCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canFocus = onFocus != null;
+    final address = place.address?.trim();
+
+    return InkWell(
+      onTap: onFocus,
+      borderRadius: BorderRadius.circular(18),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                place.assetPath,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.05),
+                      Colors.black.withOpacity(0.7),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              top: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: badgeColor.withOpacity(0.6)),
+                ),
+                child: Text(
+                  categoryLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Material(
+                color: Colors.black.withOpacity(0.4),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip:
+                      canFocus ? 'Haritada göster' : 'Konum bilgisi yakında',
+                  onPressed: onFocus,
+                  icon: Icon(
+                    Icons.map_rounded,
+                    color: canFocus ? Colors.white : Colors.white54,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (address != null && address.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                  if (onShowCategory != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        backgroundColor: Colors.black.withOpacity(0.3),
+                      ),
+                      onPressed: onShowCategory,
+                      icon: const Icon(Icons.layers_rounded, size: 16),
+                      label: const Text('Google sonuçlarını göster'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1894,7 +3008,7 @@ class _GooglePlacesPanel extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Text(
           'Bu kategori için sonuç bulunamadı. Farklı bir kategori seçebilir veya yenilemeyi deneyebilirsiniz.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Colors.black54),
         ),
       );
     } else {
@@ -1918,8 +3032,8 @@ class _GooglePlacesPanel extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 '${places.length} sonucun ilk ${preview.length} tanesi gösteriliyor.',
-                style:
-                    theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
         ],
@@ -1929,12 +3043,8 @@ class _GooglePlacesPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF111827), Color(0xFF0B0F17)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: Colors.white10),
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -1947,15 +3057,17 @@ class _GooglePlacesPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Gölbaşı Google Mekanları',
+                      'Çevredeki Mekanlar (Google)',
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Düğün salonu, pastane ve fotoğrafçı önerileri Google Places üzerinden canlı çekilir.',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: Colors.white70, height: 1.4),
+                      'Kategori seçerek Google Places sonuçlarını haritada görebilirsiniz.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -2023,7 +3135,8 @@ class _GooglePlacesErrorNotice extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           message,
-          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
@@ -2048,16 +3161,58 @@ class _GooglePlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final photoRef = place.photoReference;
+    final hasPhoto = photoRef != null && photoRef.trim().isNotEmpty;
+    final photoUrl = hasPhoto
+        ? '${GeoApiClient.baseUrl}/google-places/photo?photoRef=${Uri.encodeComponent(photoRef.trim())}&maxWidth=640'
+        : null;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF151B26),
-        border: Border.all(color: Colors.white10),
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (photoUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  photoUrl,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Container(
@@ -2083,8 +3238,10 @@ class _GooglePlaceCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       place.address,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: Colors.white70, height: 1.3),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
@@ -2094,7 +3251,8 @@ class _GooglePlaceCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Lat ${place.latitude.toStringAsFixed(4)} • Lng ${place.longitude.toStringAsFixed(4)}',
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Wrap(

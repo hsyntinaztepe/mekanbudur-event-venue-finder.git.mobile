@@ -153,6 +153,61 @@ namespace MekanBudur.Api.Services
                     
                     Console.WriteLine("VendorProfiles columns added successfully.");
                 }
+
+                // 6b. Add SuitableForCsv column if it doesn't exist
+                var suitableForExists = false;
+                try
+                {
+                    db.Database.ExecuteSqlRaw("SELECT \"SuitableForCsv\" FROM \"VendorProfiles\" LIMIT 1");
+                    suitableForExists = true;
+                }
+                catch
+                {
+                    suitableForExists = false;
+                }
+
+                if (!suitableForExists)
+                {
+                    Console.WriteLine("Adding SuitableForCsv column to VendorProfiles...");
+                    db.Database.ExecuteSqlRaw(@"
+                        ALTER TABLE ""VendorProfiles"" 
+                        ADD COLUMN ""SuitableForCsv"" varchar(500);
+                    ");
+                    Console.WriteLine("SuitableForCsv column added successfully.");
+                }
+
+                var vendorRatingsExists = false;
+                try
+                {
+                    db.Database.ExecuteSqlRaw("SELECT \"Id\" FROM \"VendorRatings\" LIMIT 1");
+                    vendorRatingsExists = true;
+                }
+                catch
+                {
+                    vendorRatingsExists = false;
+                }
+
+                if (!vendorRatingsExists)
+                {
+                    Console.WriteLine("Creating VendorRatings table...");
+                    db.Database.ExecuteSqlRaw(@"
+                        CREATE TABLE ""VendorRatings"" (
+                            ""Id"" uuid NOT NULL,
+                            ""VendorUserId"" uuid NOT NULL,
+                            ""MemberUserId"" uuid NOT NULL,
+                            ""Rating"" integer NOT NULL,
+                            ""Comment"" varchar(1000),
+                            ""CreatedAtUtc"" timestamp NOT NULL DEFAULT NOW(),
+                            ""UpdatedAtUtc"" timestamp,
+                            CONSTRAINT ""PK_VendorRatings"" PRIMARY KEY (""Id""),
+                            CONSTRAINT ""FK_VendorRatings_Users_VendorUserId"" FOREIGN KEY (""VendorUserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                            CONSTRAINT ""FK_VendorRatings_Users_MemberUserId"" FOREIGN KEY (""MemberUserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE
+                        );
+                        CREATE UNIQUE INDEX ""IX_VendorRatings_VendorUserId_MemberUserId"" ON ""VendorRatings"" (""VendorUserId"", ""MemberUserId"");
+                        CREATE INDEX ""IX_VendorRatings_VendorUserId"" ON ""VendorRatings"" (""VendorUserId"");
+                    ");
+                    Console.WriteLine("VendorRatings table added successfully.");
+                }
             }
             catch (Exception ex)
             {

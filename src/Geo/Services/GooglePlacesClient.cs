@@ -62,9 +62,37 @@ public class GooglePlacesClient
                 Name = r.Name ?? string.Empty,
                 Address = r.Vicinity ?? r.FormattedAddress ?? string.Empty,
                 Lat = r.Geometry!.Location!.Lat,
-                Lng = r.Geometry!.Location!.Lng
+                Lng = r.Geometry!.Location!.Lng,
+                PhotoReference = r.Photos?.FirstOrDefault()?.PhotoReference
             })
             .ToList();
+    }
+
+    public async Task<(byte[] bytes, string contentType)> GetPhotoAsync(
+        string photoReference,
+        int maxWidth = 480,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(photoReference))
+        {
+            throw new ArgumentException("photoReference is required", nameof(photoReference));
+        }
+
+        var safeMaxWidth = Math.Clamp(maxWidth, 64, 1600);
+
+        var url =
+            $"https://maps.googleapis.com/maps/api/place/photo" +
+            $"?maxwidth={safeMaxWidth}" +
+            $"&photoreference={Uri.EscapeDataString(photoReference)}" +
+            $"&key={_options.ApiKey}";
+
+        using var resp = await _http.GetAsync(url, cancellationToken);
+        resp.EnsureSuccessStatusCode();
+
+        var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken);
+        var contentType = resp.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+
+        return (bytes, contentType);
     }
 
     // İç DTO/JSON tipleri
@@ -93,6 +121,15 @@ public class GooglePlacesClient
         
         [JsonPropertyName("geometry")]
         public Geometry? Geometry { get; set; }
+
+        [JsonPropertyName("photos")]
+        public List<Photo>? Photos { get; set; }
+    }
+
+    public class Photo
+    {
+        [JsonPropertyName("photo_reference")]
+        public string? PhotoReference { get; set; }
     }
 
     public class Geometry
@@ -117,4 +154,5 @@ public class GooglePlaceDto
     public string Address { get; set; } = string.Empty;
     public double Lat { get; set; }
     public double Lng { get; set; }
+    public string? PhotoReference { get; set; }
 }
