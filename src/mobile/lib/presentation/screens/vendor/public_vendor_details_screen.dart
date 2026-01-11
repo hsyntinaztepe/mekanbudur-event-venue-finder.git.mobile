@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -61,66 +61,17 @@ class _PublicVendorDetailsScreenState extends State<PublicVendorDetailsScreen> {
     }
   }
 
-  Future<void> _askQuestion(
-      BuildContext context, VendorPublicProfile profile) async {
+  Future<void> _askQuestion(VendorPublicProfile profile) async {
+    if (!mounted) return;
     final vendorProvider = context.read<VendorProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final controller = TextEditingController();
 
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) {
-        final viewInsets = MediaQuery.of(context).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Soru Sor',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                profile.companyName,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'Sorunu yaz…',
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(controller.text),
-                  child: const Text('Gönder'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => _AskQuestionSheet(companyName: profile.companyName),
     );
-
-    controller.dispose();
 
     final question = (result ?? '').trim();
     if (question.isEmpty) return;
@@ -345,7 +296,7 @@ class _PublicVendorDetailsScreenState extends State<PublicVendorDetailsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _askQuestion(context, profile),
+                    onPressed: () => _askQuestion(profile),
                     icon: const Icon(Icons.question_answer_rounded),
                     label: const Text('Soru Sor'),
                   ),
@@ -440,6 +391,73 @@ class _PublicVendorDetailsScreenState extends State<PublicVendorDetailsScreen> {
               }),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AskQuestionSheet extends StatefulWidget {
+  final String companyName;
+  const _AskQuestionSheet({required this.companyName});
+
+  @override
+  State<_AskQuestionSheet> createState() => _AskQuestionSheetState();
+}
+
+class _AskQuestionSheetState extends State<_AskQuestionSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 12,
+        bottom: viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Soru Sor',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.companyName,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Sorunu yaz',
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(_controller.text),
+              child: const Text('Gönder'),
+            ),
+          ),
+        ],
       ),
     );
   }

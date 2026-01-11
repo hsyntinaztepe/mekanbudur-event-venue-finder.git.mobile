@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text;
 using MekanBudur.Api.Data;
 using MekanBudur.Api.DTOs;
@@ -88,7 +88,7 @@ app.MapGet("/health", () => Results.Ok(new { ok = true, service = "api" }));
 app.MapGet("/api/health", () => Results.Ok(new { ok = true, service = "api" }));
 
 string GetDisplayName(AppDbContext db, Guid userId)
-    => db.Users.Where(u => u.Id == userId).Select(u => u.DisplayName ?? u.Email).FirstOrDefault() ?? "Kullanıcı";
+    => db.Users.Where(u => u.Id == userId).Select(u => u.DisplayName ?? u.Email).FirstOrDefault() ?? "KullanÄ±cÄ±";
 
 Guid GetUserId(ClaimsPrincipal user)
     => Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub"), out var g) ? g : Guid.Empty;
@@ -118,20 +118,20 @@ app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, P
         catch (Exception ex)
         {
             Console.WriteLine($"JSON deserialization error: {ex.Message}");
-            return Results.BadRequest(new { error = "Geçersiz istek formatı. Lütfen tüm alanları doğru formatta doldurun." });
+            return Results.BadRequest(new { error = "GeÃ§ersiz istek formatÄ±. LÃ¼tfen tÃ¼m alanlarÄ± doÄŸru formatta doldurun." });
         }
         
-        // Model binding kontrolü
+        // Model binding kontrolÃ¼
         if (req == null)
-            return Results.BadRequest(new { error = "Geçersiz istek. Lütfen tüm alanları doldurun." });
+            return Results.BadRequest(new { error = "GeÃ§ersiz istek. LÃ¼tfen tÃ¼m alanlarÄ± doldurun." });
         
         Console.WriteLine($"Register request received: Email={req.Email}, Role={req.Role}, DisplayName={req.DisplayName}");
             
-        // Model validation kontrolü
+        // Model validation kontrolÃ¼
         if (string.IsNullOrWhiteSpace(req.Email))
             return Results.BadRequest(new { error = "Email gereklidir." });
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
-            return Results.BadRequest(new { error = "Şifre en az 6 karakter olmalıdır." });
+            return Results.BadRequest(new { error = "Åifre en az 6 karakter olmalÄ±dÄ±r." });
         if (string.IsNullOrWhiteSpace(req.DisplayName))
             return Results.BadRequest(new { error = "Ad Soyad gereklidir." });
         if (string.IsNullOrWhiteSpace(req.Role))
@@ -141,23 +141,23 @@ app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, P
         UserRole userRole;
         if (!Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out userRole))
         {
-            return Results.BadRequest(new { error = $"Geçersiz hesap tipi: {req.Role}. 'User' veya 'Vendor' olmalıdır." });
+            return Results.BadRequest(new { error = $"GeÃ§ersiz hesap tipi: {req.Role}. 'User' veya 'Vendor' olmalÄ±dÄ±r." });
         }
         
-        // Email format kontrolü
+        // Email format kontrolÃ¼
         try
         {
             var emailAddr = new System.Net.Mail.MailAddress(req.Email);
             if (emailAddr.Address != req.Email)
-                return Results.BadRequest(new { error = "Geçersiz email formatı." });
+                return Results.BadRequest(new { error = "GeÃ§ersiz email formatÄ±." });
         }
         catch
         {
-            return Results.BadRequest(new { error = "Geçersiz email formatı." });
+            return Results.BadRequest(new { error = "GeÃ§ersiz email formatÄ±." });
         }
             
         if (await db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLowerInvariant()))
-            return Results.BadRequest(new { error = "Email zaten kayıtlı." });
+            return Results.BadRequest(new { error = "Email zaten kayÄ±tlÄ±." });
 
         var user = new User
         {
@@ -180,7 +180,7 @@ app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, P
             db.VendorProfiles.Add(vp);
             await db.SaveChangesAsync();
 
-            // Geo: vendor mekânı
+            // Geo: vendor mekÃ¢nÄ±
             if (req.VenueLatitude.HasValue && req.VenueLongitude.HasValue)
             {
                 try
@@ -202,7 +202,7 @@ app.MapPost("/api/auth/register", async (HttpRequest httpReq, AppDbContext db, P
         Console.WriteLine($"Error during registration: {ex.Message}");
         Console.WriteLine($"Stack trace: {ex.StackTrace}");
         return Results.Problem(
-            title: "Kayıt sırasında hata oluştu",
+            title: "KayÄ±t sÄ±rasÄ±nda hata oluÅŸtu",
             detail: ex.Message,
             statusCode: 500
         );
@@ -213,11 +213,11 @@ app.MapPost("/api/auth/login", async (LoginRequest req, AppDbContext db, Passwor
 {
     var user = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email.Trim().ToLowerInvariant());
     if (user is null)
-        return Results.BadRequest(new { error = "Geçersiz kimlik bilgileri." });
+        return Results.BadRequest(new { error = "GeÃ§ersiz kimlik bilgileri." });
 
     var result = hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
     if (result == PasswordVerificationResult.Failed)
-        return Results.BadRequest(new { error = "Geçersiz kimlik bilgileri." });
+        return Results.BadRequest(new { error = "GeÃ§ersiz kimlik bilgileri." });
 
     var token = jwt.Generate(user);
     return Results.Ok(new AuthResponse(token, user.Role.ToString(), user.DisplayName ?? user.Email, user.Id));
@@ -228,7 +228,7 @@ app.MapGet("/api/categories", async (AppDbContext db) =>
     await db.ServiceCategories.OrderBy(c => c.Name).Select(c => new { c.Id, c.Name }).ToListAsync()
 );
 
-// PUBLIC VENDORS DIRECTORY (for mobile "Üye mekanlar" list)
+// PUBLIC VENDORS DIRECTORY (for mobile "Ãœye mekanlar" list)
 app.MapGet("/api/vendors", async (AppDbContext db, GeoClient geo) =>
 {
     var vendorProfiles = await db.VendorProfiles
@@ -295,8 +295,10 @@ app.MapGet("/api/vendors", async (AppDbContext db, GeoClient geo) =>
 });
 
 // LISTINGS
-app.MapGet("/api/listings", async (AppDbContext db, GeoClient geo, int? categoryId, string? q, string? location, decimal? minBudget, decimal? maxBudget) =>
+app.MapGet("/api/listings", async (ClaimsPrincipal user, AppDbContext db, GeoClient geo, int? categoryId, string? q, string? location, decimal? minBudget, decimal? maxBudget) =>
 {
+    var currentUserId = GetUserId(user);
+
     var query = db.EventListings
         .Include(l => l.Items).ThenInclude(i => i.ServiceCategory)
         .Include(l => l.CreatedByUser)
@@ -312,9 +314,19 @@ app.MapGet("/api/listings", async (AppDbContext db, GeoClient geo, int? category
         .Take(200)
         .ToListAsync();
 
-    // Her ilan için geo bilgilerini çek
-    var data = new List<ListingResponse>();
-    foreach (var l in list)
+    // Optimize: fetch all favorited IDs for this user in one go
+    var favoritedIds = new HashSet<Guid>();
+    if (currentUserId != Guid.Empty)
+    {
+        var ids = await db.SavedListings
+            .Where(s => s.UserId == currentUserId)
+            .Select(s => s.ListingId)
+            .ToListAsync();
+        foreach (var id in ids) favoritedIds.Add(id);
+    }
+
+    // Her ilan iÃ§in geo bilgilerini Ã§ek
+    var tasks = list.Select(async l =>
     {
         double? lat = null; double? lng = null; double? radius = null; string? label = null;
         try
@@ -322,23 +334,91 @@ app.MapGet("/api/listings", async (AppDbContext db, GeoClient geo, int? category
             var place = await geo.ByRefAsync("Listing", l.Id.ToString());
             if (place is not null) { lat = place.Latitude; lng = place.Longitude; radius = place.Radius; label = place.AddressLabel; }
         }
-        catch { /* Geo servisi erişilemezse devam et */ }
+        catch { /* Geo servisi eriÅŸilemezse devam et */ }
 
-        data.Add(new ListingResponse(
+        var isFav = favoritedIds.Contains(l.Id);
+
+        return new ListingResponse(
             l.Id, l.Title, l.Description, l.EventDate, l.Location, 
             l.Items.Sum(i => i.Budget), 
             l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
             l.CreatedByUserId,
             l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc,
             lat, lng, radius, label,
-            l.Visibility
-        ));
-    }
+            l.Visibility,
+            isFav
+        );
+    });
+
+    var data = await Task.WhenAll(tasks);
 
     return Results.Ok(data);
 });
 
-app.MapGet("/api/listings/{id:guid}", async (Guid id, AppDbContext db, GeoClient geo) =>
+app.MapPost("/api/listings/{id:guid}/favorite", [Authorize] async (Guid id, ClaimsPrincipal user, AppDbContext db) =>
+{
+    var userId = GetUserId(user);
+    if (userId == Guid.Empty) return Results.Unauthorized();
+
+    var existing = await db.SavedListings.FirstOrDefaultAsync(s => s.UserId == userId && s.ListingId == id);
+    if (existing != null)
+    {
+        db.SavedListings.Remove(existing);
+        await db.SaveChangesAsync();
+        return Results.Ok(new { isFavorited = false });
+    }
+    else
+    {
+        // Validate listing exists
+        var listingExists = await db.EventListings.AnyAsync(l => l.Id == id);
+        if (!listingExists) return Results.NotFound();
+
+        db.SavedListings.Add(new SavedListing { UserId = userId, ListingId = id });
+        await db.SaveChangesAsync();
+        return Results.Ok(new { isFavorited = true });
+    }
+});
+
+app.MapGet("/api/listings/favorites", [Authorize] async (ClaimsPrincipal user, AppDbContext db, GeoClient geo) => 
+{
+    var userId = GetUserId(user);
+    if (userId == Guid.Empty) return Results.Unauthorized();
+
+    var saved = await db.SavedListings
+        .Include(s => s.Listing).ThenInclude(l => l!.Items).ThenInclude(i => i.ServiceCategory)
+        .Include(s => s.Listing).ThenInclude(l => l!.CreatedByUser)
+        .Where(s => s.UserId == userId && s.Listing != null && s.Listing.Status == ListingStatus.Open && s.Listing.Visibility == ListingVisibility.Active)
+        .OrderByDescending(s => s.CreatedAtUtc)
+        .Select(s => s.Listing)
+        .ToListAsync();
+
+    var tasks = saved.Select(async l =>
+    {
+        double? lat = null; double? lng = null; double? radius = null; string? label = null;
+        try
+        {
+            var place = await geo.ByRefAsync("Listing", l!.Id.ToString());
+            if (place is not null) { lat = place.Latitude; lng = place.Longitude; radius = place.Radius; label = place.AddressLabel; }
+        }
+        catch { }
+
+        return new ListingResponse(
+            l!.Id, l.Title, l.Description, l.EventDate, l.Location, 
+            l.Items.Sum(i => i.Budget), 
+            l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
+            l.CreatedByUserId,
+            l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc,
+            lat, lng, radius, label,
+            l.Visibility,
+            true // IsFavorited
+        );
+    });
+
+    var data = await Task.WhenAll(tasks);
+    return Results.Ok(data);
+});
+
+app.MapGet("/api/listings/{id:guid}", async (Guid id, AppDbContext db, GeoClient geo, ClaimsPrincipal? me) =>
 {
     var l = await db.EventListings
         .Include(x => x.Items).ThenInclude(i => i.ServiceCategory)
@@ -346,6 +426,15 @@ app.MapGet("/api/listings/{id:guid}", async (Guid id, AppDbContext db, GeoClient
         .Where(x => x.Id == id && x.Visibility == ListingVisibility.Active)
         .FirstOrDefaultAsync();
     if (l is null) return Results.NotFound();
+
+    Guid? currentUserId = null;
+    if (me is not null) { try { currentUserId = GetUserId(me); } catch { } }
+
+    bool isFav = false;
+    if (currentUserId.HasValue && currentUserId != Guid.Empty)
+    {
+        isFav = await db.SavedListings.AnyAsync(s => s.UserId == currentUserId && s.ListingId == id);
+    }
 
     double? lat = null; double? lng = null; double? radius = null; string? label = null;
     var place = await geo.ByRefAsync("Listing", l.Id.ToString());
@@ -358,30 +447,34 @@ app.MapGet("/api/listings/{id:guid}", async (Guid id, AppDbContext db, GeoClient
         l.CreatedByUserId,
         l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc,
         lat, lng, radius, label,
-        l.Visibility
+        l.Visibility,
+        isFav
     ));
 });
 
 app.MapGet("/api/listings/mine", [Authorize(Roles = "User")] async (ClaimsPrincipal me, AppDbContext db) =>
 {
     var myId = GetUserId(me);
-    var data = await db.EventListings
+    var list = await db.EventListings
         .Include(l => l.Items).ThenInclude(i => i.ServiceCategory)
         .Include(l => l.CreatedByUser)
         .Where(l => l.CreatedByUserId == myId && l.Visibility != ListingVisibility.Deleted)
         .OrderByDescending(l => l.CreatedAtUtc)
-        .Select(l => new ListingResponse(
+        .ToListAsync();
+
+    var data = list.Select(l => new ListingResponse(
             l.Id, l.Title, l.Description, l.EventDate, l.Location, 
             l.Items.Sum(i => i.Budget),
             l.Items.Select(i => new ListingItemResponse(i.Id, i.ServiceCategoryId, i.ServiceCategory.Name, i.Budget, i.Status.ToString())).ToList(),
             l.CreatedByUserId,
             l.CreatedByUser.DisplayName ?? l.CreatedByUser.Email, l.Status.ToString(), l.CreatedAtUtc, null, null, null, null,
-            l.Visibility))
-        .ToListAsync();
+            l.Visibility,
+            false // IsFavorited
+        )).ToList();
     return Results.Ok(data);
 });
 
-// İlan durumunu güncelle (gizle/göster/sil)
+// Ä°lan durumunu gÃ¼ncelle (gizle/gÃ¶ster/sil)
 app.MapPatch("/api/listings/{id}/visibility", [Authorize(Roles = "User")] async (Guid id, [FromBody] VisibilityUpdateRequest req, ClaimsPrincipal me, AppDbContext db) =>
 {
     var myId = GetUserId(me);
@@ -404,13 +497,13 @@ app.MapPost("/api/listings", [Authorize(Roles = "User")] async (ListingCreateReq
             : req.EventDate.ToUniversalTime();
             
         if (eventDateUtc.Date <= DateTime.UtcNow.Date)
-            return Results.BadRequest(new { error = "Etkinlik tarihi bugünden ileri olmalı." });
+            return Results.BadRequest(new { error = "Etkinlik tarihi bugÃ¼nden ileri olmalÄ±." });
 
         var myId = GetUserId(me);
         if (myId == Guid.Empty) return Results.Unauthorized();
 
         if (req.Items == null || !req.Items.Any())
-            return Results.BadRequest(new { error = "En az bir hizmet kategorisi seçmelisiniz." });
+            return Results.BadRequest(new { error = "En az bir hizmet kategorisi seÃ§melisiniz." });
 
         var listing = new EventListing
         {
@@ -450,7 +543,7 @@ app.MapPost("/api/listings", [Authorize(Roles = "User")] async (ListingCreateReq
     catch (Exception ex)
     {
         Console.WriteLine($"Error creating listing: {ex.Message}");
-        return Results.Problem(title: "İlan oluşturulurken hata oluştu", detail: ex.Message, statusCode: 500);
+        return Results.Problem(title: "Ä°lan oluÅŸturulurken hata oluÅŸtu", detail: ex.Message, statusCode: 500);
     }
 });
 
@@ -469,7 +562,7 @@ app.MapGet("/api/geo/vendors/{userId:guid}", async (Guid userId, GeoClient geo) 
     return Results.Ok(place);
 });
 
-// Google Places API proxy - Ankara/Gölbaşı için
+// Google Places API proxy - Ankara/GÃ¶lbaÅŸÄ± iÃ§in
 app.MapGet("/api/google-places/golbasi", async (GeoClient geo) =>
 {
     try
@@ -540,9 +633,9 @@ app.MapPost("/api/bids", [Authorize(Roles = "Vendor")] async (BidCreateRequest r
 {
     var myId = GetUserId(me);
     var listing = await db.EventListings.Include(l => l.Items).FirstOrDefaultAsync(l => l.Id == req.EventListingId);
-    if (listing is null) return Results.BadRequest(new { error = "İlan bulunamadı." });
-    if (listing.CreatedByUserId == myId) return Results.BadRequest(new { error = "Kendi ilanınıza teklif veremezsiniz." });
-    if (listing.Status != ListingStatus.Open) return Results.BadRequest(new { error = "İlan açık değil." });
+    if (listing is null) return Results.BadRequest(new { error = "Ä°lan bulunamadÄ±." });
+    if (listing.CreatedByUserId == myId) return Results.BadRequest(new { error = "Kendi ilanÄ±nÄ±za teklif veremezsiniz." });
+    if (listing.Status != ListingStatus.Open) return Results.BadRequest(new { error = "Ä°lan aÃ§Ä±k deÄŸil." });
 
     if (req.Items == null || !req.Items.Any())
         return Results.BadRequest(new { error = "En az bir kaleme teklif vermelisiniz." });
@@ -572,7 +665,7 @@ app.MapPost("/api/bids", [Authorize(Roles = "Vendor")] async (BidCreateRequest r
     bid.Amount = totalAmount; // Total amount
 
     if (!bid.Items.Any())
-        return Results.BadRequest(new { error = "Geçerli bir kalem seçilmedi." });
+        return Results.BadRequest(new { error = "GeÃ§erli bir kalem seÃ§ilmedi." });
 
     db.Bids.Add(bid);
     await db.SaveChangesAsync();
@@ -631,7 +724,7 @@ app.MapPost("/api/bids/{id:guid}/accept", [Authorize(Roles = "User")] async (Gui
 
     if (bid is null) return Results.NotFound();
     if (bid.EventListing.CreatedByUserId != myId) return Results.Forbid();
-    if (bid.EventListing.Status != ListingStatus.Open) return Results.BadRequest(new { error = "İlan açık değil." });
+    if (bid.EventListing.Status != ListingStatus.Open) return Results.BadRequest(new { error = "Ä°lan aÃ§Ä±k deÄŸil." });
 
     // Partial acceptance logic:
     // 1. Mark bid as Accepted
@@ -671,7 +764,7 @@ app.MapPost("/api/bids/{id:guid}/accept", [Authorize(Roles = "User")] async (Gui
         var listingItem = bid.EventListing.Items.FirstOrDefault(i => i.Id == bidItem.EventListingItemId);
         if (listingItem != null && listingItem.Status == ListingStatus.Awarded)
         {
-             return Results.BadRequest(new { error = "Bu kalemlerden bazıları zaten başka bir teklifle kabul edildi." });
+             return Results.BadRequest(new { error = "Bu kalemlerden bazÄ±larÄ± zaten baÅŸka bir teklifle kabul edildi." });
         }
     }
     */
@@ -690,7 +783,7 @@ app.MapGet("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (ClaimsPri
     var profile = await db.VendorProfiles.FirstOrDefaultAsync(vp => vp.UserId == myId);
     
     if (profile is null)
-        return Results.NotFound(new { error = "Vendor profili bulunamadı." });
+        return Results.NotFound(new { error = "Vendor profili bulunamadÄ±." });
 
     Console.WriteLine($"[VendorProfile] GET: UserId={myId}, ServiceCategoriesCsv='{profile.ServiceCategoriesCsv}'");
     
@@ -752,7 +845,7 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
 
     if (string.IsNullOrWhiteSpace(req.CompanyName))
     {
-        return Results.BadRequest(new { error = "Firma/Mekan adı gereklidir." });
+        return Results.BadRequest(new { error = "Firma/Mekan adÄ± gereklidir." });
     }
 
     if (profile is null)
@@ -777,7 +870,7 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
             UpdatedAtUtc = DateTime.UtcNow
         };
         db.VendorProfiles.Add(profile);
-        Console.WriteLine($"[VendorProfile] PUT: Yeni profil oluşturuldu UserId={myId}");
+        Console.WriteLine($"[VendorProfile] PUT: Yeni profil oluÅŸturuldu UserId={myId}");
     }
 
     // Update profile
@@ -815,14 +908,14 @@ app.MapPut("/api/vendor/profile", [Authorize(Roles = "Vendor")] async (
         }
     }
     
-    return Results.Ok(new { success = true, message = "Profil başarıyla güncellendi." });
+    return Results.Ok(new { success = true, message = "Profil baÅŸarÄ±yla gÃ¼ncellendi." });
 });
 
 app.MapGet("/api/vendors/{vendorUserId:guid}/ratings", async (Guid vendorUserId, AppDbContext db) =>
 {
     var vendorExists = await db.VendorProfiles.AnyAsync(v => v.UserId == vendorUserId);
     if (!vendorExists)
-        return Results.NotFound(new { error = "Üye mekan bulunamadı." });
+        return Results.NotFound(new { error = "Ãœye mekan bulunamadÄ±." });
 
     var ratings = await db.VendorRatings
         .Where(r => r.VendorUserId == vendorUserId)
@@ -853,14 +946,14 @@ app.MapPost("/api/vendors/{vendorUserId:guid}/ratings", [Authorize(Roles = "User
     if (memberId == Guid.Empty) return Results.Unauthorized();
 
     if (memberId == vendorUserId)
-        return Results.BadRequest(new { error = "Kendi mekanınıza puan veremezsiniz." });
+        return Results.BadRequest(new { error = "Kendi mekanÄ±nÄ±za puan veremezsiniz." });
 
     var vendorProfile = await db.VendorProfiles.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
     if (vendorProfile is null)
-        return Results.NotFound(new { error = "Üye mekan bulunamadı." });
+        return Results.NotFound(new { error = "Ãœye mekan bulunamadÄ±." });
 
     if (req.Rating < 1 || req.Rating > 5)
-        return Results.BadRequest(new { error = "Puan 1 ile 5 arasında olmalıdır." });
+        return Results.BadRequest(new { error = "Puan 1 ile 5 arasÄ±nda olmalÄ±dÄ±r." });
 
     var sanitizedComment = string.IsNullOrWhiteSpace(req.Comment) ? null : req.Comment.Trim();
 
@@ -911,13 +1004,13 @@ app.MapPost("/api/vendor/photos", [Authorize(Roles = "Vendor")] async (HttpReque
 {
     if (!request.HasFormContentType)
     {
-        return Results.BadRequest(new { error = "Lütfen form-data formatında dosya gönderin." });
+        return Results.BadRequest(new { error = "LÃ¼tfen form-data formatÄ±nda dosya gÃ¶nderin." });
     }
 
     var form = await request.ReadFormAsync();
     if (form.Files.Count == 0)
     {
-        return Results.BadRequest(new { error = "Yüklenecek fotoğraf bulunamadı." });
+        return Results.BadRequest(new { error = "YÃ¼klenecek fotoÄŸraf bulunamadÄ±." });
     }
 
     var webRoot = env.WebRootPath;
@@ -938,13 +1031,13 @@ app.MapPost("/api/vendor/photos", [Authorize(Roles = "Vendor")] async (HttpReque
         if (file.Length == 0) continue;
         if (file.Length > maxFileBytes)
         {
-            return Results.BadRequest(new { error = "Fotoğraflar en fazla 5MB olabilir." });
+            return Results.BadRequest(new { error = "FotoÄŸraflar en fazla 5MB olabilir." });
         }
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!allowedExtensions.Contains(ext))
         {
-            return Results.BadRequest(new { error = $"Desteklenmeyen dosya türü: {ext}" });
+            return Results.BadRequest(new { error = $"Desteklenmeyen dosya tÃ¼rÃ¼: {ext}" });
         }
 
         var fileName = $"{Guid.NewGuid():N}{ext}";
@@ -964,5 +1057,72 @@ app.MapPost("/api/vendor/photos", [Authorize(Roles = "Vendor")] async (HttpReque
     return Results.Ok(new { urls = uploadedUrls });
 });
 
-app.Run();
 
+// --- QUESTIONS ---
+
+app.MapGet("/api/vendors/{vendorUserId:guid}/questions", async (Guid vendorUserId, AppDbContext db) =>
+{
+    var list = await db.VendorQuestions
+        .Where(q => q.VendorUserId == vendorUserId)
+        .OrderByDescending(q => q.CreatedAtUtc)
+        .Include(q => q.MemberUser)
+        .Take(50)
+        .Select(q => new VendorQuestionResponse(
+            q.Id,
+            q.VendorUserId,
+            q.MemberUserId,
+            q.MemberUser != null ? (q.MemberUser.DisplayName ?? q.MemberUser.Email) : "Unknown User",
+            q.Question,
+            q.Answer,
+            q.CreatedAtUtc,
+            q.AnsweredAtUtc
+        ))
+        .ToListAsync();
+    return Results.Ok(list);
+});
+
+app.MapPost("/api/vendors/{vendorUserId:guid}/questions", [Authorize(Roles = "User")] async (
+    Guid vendorUserId,
+    VendorQuestionCreateRequest req,
+    ClaimsPrincipal me,
+    AppDbContext db) =>
+{
+    var userId = GetUserId(me);
+    if (userId == Guid.Empty) return Results.Unauthorized();
+
+    var vendorExists = await db.Users.AnyAsync(u => u.Id == vendorUserId && u.Role == UserRole.Vendor);
+    if (!vendorExists) return Results.NotFound(new { error = "Mekan bulunamadÄ±." });
+
+    var question = new VendorQuestion
+    {
+        VendorUserId = vendorUserId,
+        MemberUserId = userId,
+        Question = req.Question
+    };
+    db.VendorQuestions.Add(question);
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
+
+app.MapPut("/api/vendors/questions/{questionId:guid}/answer", [Authorize(Roles = "Vendor")] async (
+    Guid questionId,
+    VendorQuestionAnswerRequest req,
+    ClaimsPrincipal me,
+    AppDbContext db) =>
+{
+    var userId = GetUserId(me);
+    if (userId == Guid.Empty) return Results.Unauthorized();
+
+    var question = await db.VendorQuestions.FindAsync(questionId);
+    if (question == null) return Results.NotFound(new { error = "Soru bulunamadÄ±." });
+
+    if (question.VendorUserId != userId)
+        return Results.Forbid();
+
+    question.Answer = req.Answer;
+    question.AnsweredAtUtc = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
+
+app.Run();

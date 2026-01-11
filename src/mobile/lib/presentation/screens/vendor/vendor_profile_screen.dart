@@ -366,6 +366,11 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
         title: const Text('Tedarikçi Profili'),
         centerTitle: true,
         actions: [
+          IconButton(
+            onPressed: () => context.push('/vendor-questions'),
+            icon: const Icon(Icons.forum_rounded),
+            tooltip: 'Sorular & Değerlendirmeler',
+          ),
           TextButton(
             onPressed: () {
               setState(() {

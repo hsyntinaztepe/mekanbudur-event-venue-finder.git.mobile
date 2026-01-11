@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/api_client.dart';
 import 'core/geo_api_client.dart';
 import 'core/router.dart';
@@ -18,7 +19,9 @@ import 'presentation/providers/place_provider.dart';
 import 'presentation/providers/google_places_provider.dart';
 import 'presentation/providers/embedded_places_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('tr_TR', null);
   runApp(const MyApp());
 }
 

@@ -5,6 +5,7 @@ import '../models/public_vendor_model.dart';
 import '../models/vendor_public_profile_model.dart';
 import '../models/vendor_rating_summary_model.dart';
 import '../models/vendor_review_model.dart';
+import '../models/vendor_question_model.dart';
 import '../models/vendor_profile_model.dart';
 
 class VendorService {
@@ -124,6 +125,25 @@ class VendorService {
     await _apiClient.dio.post(
       '/vendors/$vendorUserId/questions',
       data: <String, dynamic>{'question': trimmed},
+    );
+  }
+
+  Future<List<VendorQuestion>> getQuestions(String vendorUserId) async {
+    final response = await _apiClient.dio.get('/vendors/$vendorUserId/questions');
+    final data = response.data;
+    if (data is List) {
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(VendorQuestion.fromJson)
+          .toList(growable: false);
+    }
+    throw const FormatException('Sorular okunamadı');
+  }
+
+  Future<void> answerQuestion(String questionId, String answer) async {
+    await _apiClient.dio.put(
+      '/vendors/questions/$questionId/answer',
+      data: <String, dynamic>{'answer': answer},
     );
   }
 }

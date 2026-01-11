@@ -18,12 +18,14 @@ import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/listing/create_listing_screen.dart';
 import '../presentation/screens/listing/listing_details_screen.dart';
 import '../presentation/screens/listing/my_listings_screen.dart';
+import '../presentation/screens/listing/favorites_screen.dart';
 import '../presentation/screens/listing/saved_places_screen.dart';
 import '../presentation/screens/vendor/bid_screen.dart';
 import '../presentation/screens/vendor/my_bids_screen.dart';
 import '../presentation/screens/vendor/vendor_feed_screen.dart';
 import '../presentation/screens/vendor/public_vendor_details_screen.dart';
 import '../presentation/screens/vendor/vendor_profile_screen.dart';
+import '../presentation/screens/vendor/vendor_questions_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -66,17 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   bool get _isAuthenticated => (_token ?? '').isNotEmpty;
-
-  String? get _favoriteOwnerKey {
-    if (!_isAuthenticated) return null;
-    if (_email != null && _email!.trim().isNotEmpty) {
-      return _email;
-    }
-    if (_displayName != null && _displayName!.trim().isNotEmpty) {
-      return _displayName;
-    }
-    return _token;
-  }
 
   @override
   void initState() {
@@ -142,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _email = email;
     });
 
-    await listingProvider.loadFavorites(ownerIdentifier: _favoriteOwnerKey);
+    await listingProvider.fetchFavorites();
   }
 
   Future<void> _refreshListings() async {
@@ -150,15 +141,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleFavoriteTap(Listing listing) async {
-    final ownerKey = _favoriteOwnerKey;
-    if (ownerKey == null || ownerKey.isEmpty) {
+    if (!_isAuthenticated) {
       _showLoginRequiredMessage();
       return;
     }
 
     final added = await context
         .read<ListingProvider>()
-        .toggleFavorite(listingId: listing.id, ownerIdentifier: ownerKey);
+        .toggleFavorite(listing.id);
 
     if (!mounted) return;
 
@@ -866,12 +856,38 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            greeting,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                greeting,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              if (_isAuthenticated)
+                InkWell(
+                  onTap: () => context.push('/favorites'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.favorite, color: Colors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Favorilerim', style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.red, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Container(
@@ -1150,7 +1166,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final dateLabel = dateFormatter.format(listing.eventDate);
     final budgetLabel = currencyFormatter.format(listing.totalBudget);
     final isFavorite = provider.isFavorite(listing.id);
-    final canFavorite = _isAuthenticated && _favoriteOwnerKey != null;
+    final canFavorite = _isAuthenticated;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -1439,6 +1455,10 @@ final router = GoRouter(
       builder: (context, state) => const MyListingsScreen(),
     ),
     GoRoute(
+      path: '/favorites',
+      builder: (context, state) => const FavoritesScreen(),
+    ),
+    GoRoute(
       path: '/create-listing',
       builder: (context, state) => const CreateListingScreen(),
     ),
@@ -1492,6 +1512,10 @@ final router = GoRouter(
     GoRoute(
       path: '/my-bids',
       builder: (context, state) => const MyBidsScreen(),
+    ),
+    GoRoute(
+      path: '/vendor-questions',
+      builder: (context, state) => const VendorQuestionsScreen(),
     ),
   ],
 );

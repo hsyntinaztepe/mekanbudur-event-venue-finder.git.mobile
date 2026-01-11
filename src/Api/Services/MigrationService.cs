@@ -208,11 +208,75 @@ namespace MekanBudur.Api.Services
                     ");
                     Console.WriteLine("VendorRatings table added successfully.");
                 }
+
+                var vendorQuestionsExists = false;
+                try
+                {
+                    db.Database.ExecuteSqlRaw("SELECT \"Id\" FROM \"VendorQuestions\" LIMIT 1");
+                    vendorQuestionsExists = true;
+                }
+                catch
+                {
+                    vendorQuestionsExists = false;
+                }
+
+                if (!vendorQuestionsExists)
+                {
+                    Console.WriteLine("Creating VendorQuestions table...");
+                    db.Database.ExecuteSqlRaw(@"
+                        CREATE TABLE ""VendorQuestions"" (
+                            ""Id"" uuid NOT NULL,
+                            ""VendorUserId"" uuid NOT NULL,
+                            ""MemberUserId"" uuid NOT NULL,
+                            ""Question"" varchar(500) NOT NULL,
+                            ""Answer"" varchar(1000),
+                            ""CreatedAtUtc"" timestamp NOT NULL DEFAULT NOW(),
+                            ""AnsweredAtUtc"" timestamp,
+                            CONSTRAINT ""PK_VendorQuestions"" PRIMARY KEY (""Id""),
+                            CONSTRAINT ""FK_VendorQuestions_Users_VendorUserId"" FOREIGN KEY (""VendorUserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                            CONSTRAINT ""FK_VendorQuestions_Users_MemberUserId"" FOREIGN KEY (""MemberUserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE
+                        );
+                        CREATE INDEX ""IX_VendorQuestions_VendorUserId"" ON ""VendorQuestions"" (""VendorUserId"");
+                    ");
+                    Console.WriteLine("VendorQuestions table added successfully.");
+                }
+
+                if (!TableExists(db, "SavedListings"))
+                {
+                    Console.WriteLine("Creating SavedListings table...");
+                    db.Database.ExecuteSqlRaw(@"
+                        CREATE TABLE ""SavedListings"" (
+                            ""Id"" uuid NOT NULL,
+                            ""UserId"" uuid NOT NULL,
+                            ""ListingId"" uuid NOT NULL,
+                            ""CreatedAtUtc"" timestamp NOT NULL DEFAULT NOW(),
+                            CONSTRAINT ""PK_SavedListings"" PRIMARY KEY (""Id""),
+                            CONSTRAINT ""FK_SavedListings_Users_UserId"" FOREIGN KEY (""UserId"" ) REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                            CONSTRAINT ""FK_SavedListings_EventListings_ListingId"" FOREIGN KEY (""ListingId"") REFERENCES ""EventListings"" (""Id"") ON DELETE CASCADE
+                        );
+                        CREATE UNIQUE INDEX ""IX_SavedListings_UserId_ListingId"" ON ""SavedListings"" (""UserId"", ""ListingId"");
+                        CREATE INDEX ""IX_SavedListings_UserId"" ON ""SavedListings"" (""UserId"");
+                    ");
+                    Console.WriteLine("SavedListings table added successfully.");
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Migration failed: {ex.Message}");
                 // Continue anyway, maybe it was already migrated or partial failure
+            }
+        }
+
+        private static bool TableExists(AppDbContext db, string tableName)
+        {
+            try
+            {
+                db.Database.ExecuteSqlRaw($"SELECT 1 FROM \"{tableName}\" LIMIT 1");
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
     }

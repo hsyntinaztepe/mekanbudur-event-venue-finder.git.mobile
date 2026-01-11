@@ -1,5 +1,6 @@
 class VendorProfile {
   final String id;
+  final String userId;
   final String companyName;
   final String? description;
   final String? venueType;
@@ -18,6 +19,7 @@ class VendorProfile {
 
   VendorProfile({
     required this.id,
+    required this.userId,
     required this.companyName,
     this.description,
     this.venueType,
@@ -54,6 +56,7 @@ class VendorProfile {
   factory VendorProfile.fromJson(Map<String, dynamic> json) {
     return VendorProfile(
       id: json['id'],
+      userId: json['userId'] ?? '', // Fallback or handle if missing
       companyName: json['companyName'],
       description: json['description'],
       venueType: json['venueType'],

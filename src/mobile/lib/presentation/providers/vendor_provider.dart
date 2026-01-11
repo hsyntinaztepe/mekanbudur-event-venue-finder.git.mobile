@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/public_vendor_model.dart';
 import '../../data/models/vendor_public_profile_model.dart';
 import '../../data/models/vendor_review_model.dart';
+import '../../data/models/vendor_question_model.dart';
 import '../../data/models/vendor_profile_model.dart';
 import '../../data/services/vendor_service.dart';
 
@@ -22,10 +23,15 @@ class VendorProvider extends ChangeNotifier {
       <String, VendorPublicProfile>{};
   final Map<String, List<VendorReview>> _reviewsByVendorId =
       <String, List<VendorReview>>{};
+  
+  List<VendorQuestion> _myQuestions = [];
+  List<VendorReview> _myReviews = [];
 
   VendorProvider(this._vendorService);
 
   VendorProfile? get profile => _profile;
+  List<VendorQuestion> get myQuestions => List.unmodifiable(_myQuestions);
+  List<VendorReview> get myReviews => List.unmodifiable(_myReviews);
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -161,6 +167,47 @@ class VendorProvider extends ChangeNotifier {
 
   Future<void> askQuestion(String vendorUserId, String question) async {
     await _vendorService.askVendorQuestion(vendorUserId, question);
+  }
+
+  Future<void> fetchMyQuestions() async {
+    if (_profile == null) {
+      await fetchProfile();
+    }
+    if (_profile == null) return;
+
+    _isLoading = true;
+    notifyListeners();
+    try {
+      _myQuestions = await _vendorService.getQuestions(_profile!.userId);
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchMyReviews() async {
+    if (_profile == null) {
+      await fetchProfile();
+    }
+    if (_profile == null) return;
+
+    _isLoading = true;
+    notifyListeners();
+    try {
+      _myReviews = await _vendorService.getVendorReviews(_profile!.userId);
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> answerQuestion(String questionId, String answer) async {
+    await _vendorService.answerQuestion(questionId, answer);
+    await fetchMyQuestions();
   }
 
   VendorPublicProfile? _buildFallbackProfile(String vendorUserId) {

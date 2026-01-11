@@ -55,6 +55,7 @@ class Listing {
   final String status;
   final DateTime createdAt;
   final ListingVisibility visibility;
+  final bool isFavorited;
 
   Listing({
     required this.id,
@@ -71,6 +72,7 @@ class Listing {
     required this.status,
     required this.createdAt,
     this.visibility = ListingVisibility.active,
+    this.isFavorited = false,
   });
 
   Listing copyWith({
@@ -88,6 +90,7 @@ class Listing {
     String? status,
     DateTime? createdAt,
     ListingVisibility? visibility,
+    bool? isFavorited,
   }) {
     return Listing(
       id: id ?? this.id,
@@ -104,6 +107,7 @@ class Listing {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       visibility: visibility ?? this.visibility,
+      isFavorited: isFavorited ?? this.isFavorited,
     );
   }
 
@@ -135,6 +139,7 @@ class Listing {
       status: json['status'],
       createdAt: DateTime.parse(json['createdAtUtc']),
       visibility: _visibilityFromJson(json['visibility']),
+      isFavorited: json['isFavorited'] ?? false,
     );
   }
 }

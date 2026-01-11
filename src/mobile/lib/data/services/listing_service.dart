@@ -47,6 +47,16 @@ class ListingService {
     });
   }
 
+  Future<bool> toggleFavorite(String id) async {
+    final response = await _apiClient.dio.post('/listings/$id/favorite');
+    return response.data['isFavorited'] as bool;
+  }
+
+  Future<List<Listing>> getFavorites() async {
+    final response = await _apiClient.dio.get('/listings/favorites');
+    return (response.data as List).map((e) => Listing.fromJson(e)).toList();
+  }
+
   Future<void> updateListingVisibility({
     required String listingId,
     required int visibility,

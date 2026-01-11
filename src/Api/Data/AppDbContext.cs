@@ -15,6 +15,8 @@ namespace MekanBudur.Api.Data
         public DbSet<Bid> Bids { get; set; } = default!;
         public DbSet<BidItem> BidItems { get; set; } = default!;
         public DbSet<VendorRating> VendorRatings { get; set; } = default!;
+        public DbSet<VendorQuestion> VendorQuestions { get; set; } = default!;
+        public DbSet<SavedListing> SavedListings { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -59,6 +61,18 @@ namespace MekanBudur.Api.Data
                 .HasOne(r => r.MemberUser)
                 .WithMany(u => u.RatingsGiven)
                 .HasForeignKey(r => r.MemberUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorQuestion>()
+                .HasOne(q => q.VendorUser)
+                .WithMany()
+                .HasForeignKey(q => q.VendorUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VendorQuestion>()
+                .HasOne(q => q.MemberUser)
+                .WithMany()
+                .HasForeignKey(q => q.MemberUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }

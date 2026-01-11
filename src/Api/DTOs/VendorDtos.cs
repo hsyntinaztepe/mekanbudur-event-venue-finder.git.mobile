@@ -75,4 +75,23 @@ namespace MekanBudur.Api.DTOs
         VendorRatingSummaryResponse Summary,
         List<VendorRatingResponse> Ratings
     );
+
+    public record VendorQuestionCreateRequest(
+        [property: Required, MaxLength(500)] string Question
+    );
+
+    public record VendorQuestionAnswerRequest(
+        [property: Required, MaxLength(1000)] string Answer
+    );
+
+    public record VendorQuestionResponse(
+        Guid Id,
+        Guid VendorUserId,
+        Guid UserId,
+        string UserDisplayName,
+        string Question,
+        string? Answer,
+        DateTime CreatedAtUtc,
+        DateTime? AnsweredAtUtc
+    );
 }

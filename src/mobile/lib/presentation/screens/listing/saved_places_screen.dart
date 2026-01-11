@@ -6,7 +6,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/public_url.dart';
-import '../../../core/geo_api_client.dart';
 import '../../../data/models/listing_model.dart';
 import '../../../data/models/google_place_category.dart';
 import '../../../data/models/google_place_model.dart';
@@ -45,6 +44,7 @@ class SavedPlacesScreen extends StatefulWidget {
 
 class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   final MapController _mapController = MapController();
+  final ScrollController _scrollController = ScrollController();
   static const LatLng _ankaraCenter = LatLng(39.9334, 32.8597);
   String? _activeMarkerId;
   bool _isMapExpanded = false;
@@ -56,6 +56,12 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   void initState() {
     super.initState();
     _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -180,13 +186,6 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
             theme: theme,
           )
         : const <Widget>[];
-    final memberVendorSection = isVendorSelected
-        ? _buildMemberVendorPlacesSection(
-            places: vendorPlaces,
-            vendorProvider: vendorProvider,
-            theme: theme,
-          )
-        : const <Widget>[];
     final publicVendorSection = isVendorSelected
         ? _buildPublicVendorShowcaseSection(
             vendorProvider: vendorProvider,
@@ -216,19 +215,16 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
       ],
       const SizedBox(height: 18),
       if (isVendorSelected) ...[
-        ...memberVendorSection,
-        if (memberVendorSection.isNotEmpty) const SizedBox(height: 18),
         ...publicVendorSection,
         if (publicVendorSection.isNotEmpty) const SizedBox(height: 18),
         ...embeddedSection,
         if (embeddedSection.isNotEmpty) const SizedBox(height: 18),
-        _buildGooglePlacesSection(googleProvider),
-        const SizedBox(height: 18),
       ],
     ];
 
     if (provider.isLoading && provider.places.isEmpty) {
       return ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -240,6 +236,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
 
     if (provider.error != null && provider.places.isEmpty) {
       return ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -254,6 +251,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
 
     if (provider.places.isEmpty) {
       return ListView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -288,6 +286,7 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     }
 
     return ListView(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -468,38 +467,28 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
       return widgets;
     }
 
-    final visiblePlaces = provider.places.length > 16
-        ? provider.places.take(16).toList(growable: false)
-        : provider.places;
+    final visiblePlaces = provider.places;
 
-    widgets.add(
-      SizedBox(
-        height: 188,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: visiblePlaces.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (context, index) {
-            final place = visiblePlaces[index];
-            final categoryLabel = _embeddedCategoryLabel(place.category);
-            final badgeColor = _embeddedCategoryColor(place.category, theme);
-            final googleCategory =
-                _mapEmbeddedCategoryToGoogleCategory(place.category);
-            return _EmbeddedPlaceCard(
-              place: place,
-              categoryLabel: categoryLabel,
-              badgeColor: badgeColor,
-              onFocus: place.hasCoordinates
-                  ? () => _focusOnEmbeddedPlace(place)
-                  : null,
-              onShowCategory: googleCategory == null
-                  ? null
-                  : () => googleProvider.switchCategory(googleCategory),
-            );
-          },
+    for (final place in visiblePlaces) {
+      final categoryLabel = _embeddedCategoryLabel(place.category);
+      final badgeColor = _embeddedCategoryColor(place.category, theme);
+
+      widgets.add(
+        SizedBox(
+          height: 220,
+          child: _EmbeddedPlaceCard(
+            place: place,
+            categoryLabel: categoryLabel,
+            badgeColor: badgeColor,
+            onFocus: place.hasCoordinates
+                ? () => _focusOnEmbeddedPlace(place)
+                : null,
+            onShowCategory: null,
+          ),
         ),
-      ),
-    );
+      );
+      widgets.add(const SizedBox(height: 12));
+    }
 
     if (provider.isLoading) {
       widgets.add(const SizedBox(height: 8));
@@ -520,6 +509,8 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   void _focusOnPlace(PlaceModel place) {
     final target = LatLng(place.latitude, place.longitude);
     _mapController.move(target, 14);
+    _scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
   void _focusOnVendorCoordinates(PublicVendor vendor) {
@@ -527,6 +518,8 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     final target = LatLng(vendor.latitude!, vendor.longitude!);
     setState(() => _activeMarkerId = 'public-vendor-${vendor.userId}');
     _mapController.move(target, 14.2);
+    _scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
   void _focusOnGooglePlace(GooglePlaceModel place) {
@@ -539,12 +532,16 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     final target = LatLng(place.latitude!, place.longitude!);
     setState(() => _activeMarkerId = 'embedded-${place.key}');
     _mapController.move(target, 14.4);
+    _scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
   void _focusOnListing(Listing listing) {
     if (listing.latitude == null || listing.longitude == null) return;
     final target = LatLng(listing.latitude!, listing.longitude!);
     _mapController.move(target, 14.2);
+    _scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
   Future<void> _handleMarkerTap(
@@ -1405,13 +1402,6 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildGooglePlacesSection(GooglePlacesProvider provider) {
-    return _GooglePlacesPanel(
-      provider: provider,
-      onFocusOnMap: _focusOnGooglePlace,
     );
   }
 
@@ -2381,121 +2371,169 @@ class _PublicVendorShowcaseCard extends StatelessWidget {
     final photoUrl = vendor.photoUrlList.isNotEmpty
         ? normalizePublicUrl(vendor.photoUrlList.first)
         : null;
-    final categories = vendor.categoryList.take(3).join(' • ');
+    final categoryLabel = vendor.categoryList.isNotEmpty
+        ? vendor.categoryList.first
+        : 'Üye Mekan';
     final address = vendor.addressLabel?.trim();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: photoUrl == null
-                ? Container(
-                    width: 72,
-                    height: 72,
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.storefront_rounded,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : Image.network(
-                    photoUrl,
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 72,
-                      height: 72,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.storefront_rounded,
-                        color: theme.colorScheme.onSurfaceVariant,
+    return InkWell(
+      onTap: onVisit,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 220,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: photoUrl == null
+                    ? Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.storefront_rounded,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          size: 48,
+                        ),
+                      )
+                    : Image.network(
+                        photoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.storefront_rounded,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.0),
+                        Colors.black.withOpacity(0.8),
+                      ],
+                      stops: const [0.4, 1.0],
                     ),
                   ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        vendor.companyName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                ),
+              ),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (vendor.isVerified) ...[
+                        Icon(Icons.verified_rounded,
+                            color: theme.colorScheme.primary, size: 14),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        categoryLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (onShowOnMap != null)
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Material(
+                    color: Colors.black.withOpacity(0.65),
+                    borderRadius: BorderRadius.circular(30),
+                    child: InkWell(
+                      onTap: onShowOnMap,
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.map_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Haritada',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    if (vendor.isVerified)
-                      Icon(
-                        Icons.verified_rounded,
-                        size: 18,
-                        color: theme.colorScheme.primary,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                _VendorRatingRow(
-                  averageRating: vendor.averageRating,
-                  ratingCount: vendor.ratingCount,
-                ),
-                if (categories.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    categories,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
                   ),
-                ],
-                if (address != null && address.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    address,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Row(
+                ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: onShowOnMap,
-                      icon: const Icon(Icons.map_rounded),
-                      label: const Text('Haritada'),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onVisit,
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('Detay'),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _VendorRatingRow(
+                        averageRating: vendor.averageRating,
+                        ratingCount: vendor.ratingCount,
+                        isOverlay: true,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      vendor.companyName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (address != null && address.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2505,10 +2543,12 @@ class _VendorRatingRow extends StatelessWidget {
   const _VendorRatingRow({
     required this.averageRating,
     required this.ratingCount,
+    this.isOverlay = false,
   });
 
   final double? averageRating;
   final int ratingCount;
+  final bool isOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -2519,9 +2559,11 @@ class _VendorRatingRow extends StatelessWidget {
     final bool hasHalfStar =
         hasRating && (normalized - fullStars) >= 0.5 && fullStars < 5;
 
-    Color activeColor = Colors.amber.shade700;
-    Color inactiveColor =
-        theme.colorScheme.onSurfaceVariant.withOpacity(hasRating ? 0.5 : 0.35);
+    Color activeColor = Colors.amber.shade600;
+    Color inactiveColor = isOverlay
+        ? Colors.white.withOpacity(0.5)
+        : theme.colorScheme.onSurfaceVariant
+            .withOpacity(hasRating ? 0.5 : 0.35);
 
     Widget buildIcon(int index) {
       IconData icon;
@@ -2547,7 +2589,10 @@ class _VendorRatingRow extends StatelessWidget {
               ? '${normalized.toStringAsFixed(1)} ($ratingCount)'
               : 'Henüz puan yok',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: isOverlay
+                ? Colors.white.withOpacity(0.9)
+                : theme.colorScheme.onSurfaceVariant,
+            fontWeight: isOverlay ? FontWeight.w500 : null,
           ),
         ),
       ],
@@ -2907,19 +2952,36 @@ class _EmbeddedPlaceCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 8,
-              top: 8,
+              right: 12,
+              top: 12,
               child: Material(
-                color: Colors.black.withOpacity(0.4),
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip:
-                      canFocus ? 'Haritada göster' : 'Konum bilgisi yakında',
-                  onPressed: onFocus,
-                  icon: Icon(
-                    Icons.map_rounded,
-                    color: canFocus ? Colors.white : Colors.white54,
-                    size: 18,
+                color: Colors.black.withOpacity(0.65),
+                borderRadius: BorderRadius.circular(30),
+                child: InkWell(
+                  onTap: onFocus,
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.map_rounded,
+                          color: canFocus ? Colors.white : Colors.white54,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Haritada',
+                          style: TextStyle(
+                            color: canFocus ? Colors.white : Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2969,318 +3031,6 @@ class _EmbeddedPlaceCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _GooglePlacesPanel extends StatelessWidget {
-  const _GooglePlacesPanel({
-    required this.provider,
-    required this.onFocusOnMap,
-  });
-
-  final GooglePlacesProvider provider;
-  final void Function(GooglePlaceModel place) onFocusOnMap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final places = provider.places;
-    final isBusy = provider.isLoading && places.isEmpty;
-    final hasError = provider.error != null && places.isEmpty;
-    final Widget panelContent;
-    if (isBusy) {
-      panelContent = const Padding(
-        key: ValueKey('google-loading'),
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    } else if (hasError) {
-      panelContent = _GooglePlacesErrorNotice(
-        key: const ValueKey('google-error'),
-        message: provider.error!,
-        onRetry: provider.refreshActive,
-      );
-    } else if (places.isEmpty) {
-      panelContent = const Padding(
-        key: ValueKey('google-empty'),
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text(
-          'Bu kategori için sonuç bulunamadı. Farklı bir kategori seçebilir veya yenilemeyi deneyebilirsiniz.',
-          style: TextStyle(color: Colors.black54),
-        ),
-      );
-    } else {
-      final preview =
-          places.take(_googlePlacesPreviewLimit).toList(growable: false);
-
-      panelContent = Column(
-        key: ValueKey(
-          'google-data-${provider.activeCategory}-${preview.length}',
-        ),
-        children: [
-          for (final place in preview) ...[
-            _GooglePlaceCard(
-              place: place,
-              onFocusOnMap: () => onFocusOnMap(place),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (places.length > preview.length)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '${places.length} sonucun ilk ${preview.length} tanesi gösteriliyor.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ),
-        ],
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: theme.colorScheme.surface,
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Çevredeki Mekanlar (Google)',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Kategori seçerek Google Places sonuçlarını haritada görebilirsiniz.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Google verilerini yenile',
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () => provider.refreshActive(),
-              ),
-            ],
-          ),
-          if (provider.isLoading && places.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(minHeight: 3),
-          ],
-          const SizedBox(height: 12),
-          SegmentedButton<String>(
-            segments: GooglePlaceCategory.values
-                .map(
-                  (value) => ButtonSegment<String>(
-                    value: value,
-                    label: Text(GooglePlaceCategory.labelFor(value)),
-                    icon: Icon(_googleCategoryIcons[value] ?? Icons.place),
-                  ),
-                )
-                .toList(),
-            selected: {provider.activeCategory},
-            onSelectionChanged: (selection) {
-              final target = selection.first;
-              provider.switchCategory(target);
-            },
-          ),
-          const SizedBox(height: 16),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: panelContent,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GooglePlacesErrorNotice extends StatelessWidget {
-  const _GooglePlacesErrorNotice({
-    super.key,
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Google verileri alınamadı',
-          style: theme.textTheme.titleSmall
-              ?.copyWith(color: theme.colorScheme.error),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          message,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: onRetry,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Tekrar Dene'),
-        ),
-      ],
-    );
-  }
-}
-
-class _GooglePlaceCard extends StatelessWidget {
-  const _GooglePlaceCard({
-    required this.place,
-    required this.onFocusOnMap,
-  });
-
-  final GooglePlaceModel place;
-  final VoidCallback onFocusOnMap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final photoRef = place.photoReference;
-    final hasPhoto = photoRef != null && photoRef.trim().isNotEmpty;
-    final photoUrl = hasPhoto
-        ? '${GeoApiClient.baseUrl}/google-places/photo?photoRef=${Uri.encodeComponent(photoRef.trim())}&maxWidth=640'
-        : null;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: theme.colorScheme.surfaceContainerHighest,
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (photoUrl != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.cyanAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.cyanAccent.withOpacity(0.6)),
-                ),
-                child: const Icon(Icons.apartment_rounded,
-                    color: Colors.cyanAccent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      place.name,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      place.address,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Lat ${place.latitude.toStringAsFixed(4)} • Lng ${place.longitude.toStringAsFixed(4)}',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              TextButton.icon(
-                onPressed: onFocusOnMap,
-                icon: const Icon(Icons.map_rounded),
-                label: const Text('Haritada Odakla'),
-              ),
-              TextButton.icon(
-                onPressed: () {
-                  final text = '${place.name} - ${place.address}';
-                  Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Adres panoya kopyalandı'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.copy_rounded),
-                label: const Text('Adresi Kopyala'),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

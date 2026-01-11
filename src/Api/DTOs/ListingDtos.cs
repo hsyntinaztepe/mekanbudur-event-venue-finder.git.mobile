@@ -36,7 +36,8 @@ namespace MekanBudur.Api.DTOs
         double? Radius,
         string? AddressLabel,
         // Visibility
-        ListingVisibility Visibility
+        ListingVisibility Visibility,
+        bool IsFavorited = false
     );
 
     public record ListingItemResponse(
