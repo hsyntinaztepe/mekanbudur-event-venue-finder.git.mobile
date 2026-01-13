@@ -1,252 +1,159 @@
-# MekanBudur - Etkinlik ve Hizmet Pazar Yeri
+# MekanBudur Mobile - Özel Etkinlik Pazar Yeri Mobil Uygulaması
 
-Mikroservis mimarisi ve Flutter mobil uygulama ile gelistirilmis etkinlik pazar yeri platformu. Kullanicilar etkinlik ilanlari olusturabilir, tedarikciler (vendor) bu ilanlara teklif verebilir.
+![MekanBudur Mobile](template_mobile.png)
 
-## Proje Hakkinda
+![Project Status](https://img.shields.io/badge/status-active-success.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Flutter](https://img.shields.io/badge/Flutter-3.0+-02569B.svg?logo=flutter)
+![Dart](https://img.shields.io/badge/Dart-3.0+-0175C2.svg?logo=dart)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)
 
-MekanBudur, etkinlik sahipleri ile hizmet saglayicilari bir araya getiren bir pazar yeri uygulamasidir. Platform iki ana kullanici rolune sahiptir:
+**MekanBudur Mobile**, etkinlik düzenleyiciler (kullanıcılar) ile hizmet sağlayıcıları (mekanlar, fotoğrafçılar, organizasyon firmaları vb.) buluşturan, konum tabanlı ve **"Ters Açık Artırma" (Reverse Auction)** modeline dayalı modern bir pazar yeri uygulamasıdır.
 
-- **Kullanici (User):** Etkinlik ilanlari olusturur, gelen teklifleri degerlendirir ve kabul eder.
-- **Tedarikci (Vendor):** Acik ilanlari inceler ve hizmet verebilecegi ilanlara teklif gonderir.
+"Mekandan hizmete, etkinliğin için her şey MekanBudur'da."
 
-## Teknolojiler
+---
+
+## 📋 İçindekiler
+
+- [Proje Hakkında](#-proje-hakkında)
+- [Temel Özellikler](#-temel-özellikler)
+- [Mimari Yapı](#-mimari-yapı)
+- [Teknoloji Yığını](#-teknoloji-yığını)
+- [Veritabanı Tasarımı](#-veritabanı-tasarımı)
+- [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
+- [Kullanım Senaryoları](#-kullanım-senaryoları)
+
+---
+
+## 🚀 Proje Hakkında
+
+Bu proje, geleneksel ilan sitelerinin aksine, kullanıcının ihtiyacını belirttiği ve hizmet sağlayıcıların bu ihtiyaca teklif verdiği bir yapı sunar. Mikroservis mimarisi prensipleriyle tasarlanmış olup, servisler arası iletişim ve konteynerizasyon (Docker) yapılarını pekiştirmek amacıyla geliştirilmiştir.
+
+**Nasıl Çalışır?**
+1. **Keşfet:** Kullanıcılar etkinlik türüne ve şehre göre arama yapar.
+2. **Karşılaştır:** Hizmet sağlayıcıların profillerini ve puanlarını inceler.
+3. **Teklif Al:** İlan oluşturarak tedarikçilerden fiyat teklifleri toplar.
+
+---
+
+## ✨ Temel Özellikler
+
+- **Ters Açık Artırma (Reverse Auction):** İlan sahibi beklemede kalır, tedarikçiler işi almak için fiyat teklifi sunar.
+- **Konum Tabanlı Keşif:** Flutter Map entegrasyonu ile ilanlar ve mekanlar harita üzerinde görüntülenir.
+- **Rol Bazlı Yönetim:**
+  - **User (Kullanıcı):** İlan oluşturma, teklif değerlendirme, mekan yorumlama.
+  - **Vendor (Hizmet Sağlayıcı):** Profil yönetimi, hizmet kategorileri belirleme, açık ilanlara teklif verme.
+  - **Admin:** İçerik denetimi, kullanıcı/mekan silme ve platform yönetimi.
+- **Hibrit Veri Yapısı:** Google Places API verileri ile yerel verilerin harmanlandığı hibrit harita sistemi.
+- **Güvenlik:** JWT (JSON Web Token) tabanlı güvenli kimlik doğrulama.
+
+---
+
+## 🏗 Mimari Yapı
+
+Proje, sorumlulukların ayrıldığı modüler bir yapıya sahiptir ve Docker üzerinde koşar:
+
+1. **Main API Service (.NET):** Sistemin çekirdeğidir. Kimlik doğrulama, ilan yönetimi, teklif işlemleri ve veritabanı CRUD operasyonlarını yürütür.
+2. **Geo Service (Microservice):** Konumsal hesaplamalar ve dış harita API'leri (Google Places) ile iletişimi sağlayan izole servis.
+3. **Mobile Client (Flutter):** Flutter ile geliştirilmiş, RESTful API ile haberleşen, cross-platform mobil uygulama.
+
+---
+
+## 🛠 Teknoloji Yığını
 
 ### Backend
-- .NET 8.0 (Minimal API)
-- Entity Framework Core 8.0 (Code First)
-- PostgreSQL 16
-- JWT Authentication
+- **Framework:** .NET 8 (Minimal API Mimarisi)
+- **Dil:** C#
+- **Veritabanı:** PostgreSQL (Npgsql)
+- **ORM:** Entity Framework Core
+- **Auth:** JWT Bearer Authentication
 
-### Mobil Uygulama
-- Flutter 3.x
-- Provider (State Management)
-- Dio (HTTP Client)
-- GoRouter (Navigation)
-- flutter_map + latlong2 (Harita)
+### Mobile
+- **Framework:** Flutter
+- **Dil:** Dart
+- **State Management:** Provider
+- **Harita:** Flutter Map
+- **HTTP Client:** Dio
 
-### Altyapi
-- Docker ve Docker Compose
-- pgAdmin 4
+### DevOps & Altyapı
+- **Container:** Docker & Docker Compose
+- **İletişim:** HTTP RESTful API
 
-## Proje Yapisi
+---
 
-```
-mekanbudur/
-|
-|-- src/
-|   |-- Api/                          # Ana API servisi (.NET 8)
-|   |   |-- Data/
-|   |   |   |-- AppDbContext.cs       # Entity Framework DbContext
-|   |   |-- DTOs/
-|   |   |   |-- AuthDtos.cs           # Kimlik dogrulama DTO'lari
-|   |   |   |-- BidDtos.cs            # Teklif DTO'lari
-|   |   |   |-- ListingDtos.cs        # Ilan DTO'lari
-|   |   |   |-- VendorDtos.cs         # Tedarikci DTO'lari
-|   |   |-- Models/
-|   |   |   |-- User.cs               # Kullanici modeli
-|   |   |   |-- EventListing.cs       # Ilan modeli
-|   |   |   |-- Bid.cs                # Teklif modeli
-|   |   |   |-- VendorProfile.cs      # Tedarikci profili
-|   |   |   |-- ServiceCategory.cs    # Hizmet kategorisi
-|   |   |-- Services/
-|   |   |   |-- JwtTokenService.cs    # JWT token uretimi
-|   |   |   |-- GeoClient.cs          # Geo servisi istemcisi
-|   |   |-- Program.cs                # API endpoint tanimlari
-|   |   |-- Dockerfile
-|   |
-|   |-- Geo/                          # Konum servisi (.NET 8)
-|   |   |-- Data/
-|   |   |   |-- GeoDbContext.cs
-|   |   |-- Models/
-|   |   |   |-- Place.cs              # Konum modeli
-|   |   |-- Program.cs                # Geo API endpoint'leri
-|   |   |-- Dockerfile
-|   |
-|   |-- mobile/                       # Flutter mobil uygulama
-|       |-- lib/
-|       |   |-- core/
-|       |   |   |-- api_client.dart   # Dio HTTP istemcisi
-|       |   |   |-- router.dart       # GoRouter yapilandirmasi
-|       |   |-- data/
-|       |   |   |-- models/           # Veri modelleri
-|       |   |   |-- services/         # API servisleri
-|       |   |-- presentation/
-|       |   |   |-- providers/        # State yonetimi
-|       |   |   |-- screens/          # Ekranlar
-|       |   |       |-- auth/         # Giris/Kayit ekranlari
-|       |   |       |-- listing/      # Ilan ekranlari
-|       |   |       |-- vendor/       # Tedarikci ekranlari
-|       |   |-- main.dart
-|       |-- pubspec.yaml
-|
-|-- docker-compose.yml                # Docker servis tanimlari
-|-- README.md
-```
+## 💾 Veritabanı Tasarımı
 
-## Kurulum
+Sistem ilişkisel veritabanı (Relational DB) üzerine kuruludur. Ana varlıklar şunlardır:
+
+* **Users:** Temel kimlik bilgileri ve Rol (User, Vendor, Admin).
+* **VendorProfiles:** Hizmet sağlayıcılara ait detaylar (Kapasite, Hizmet Türleri, Görseller, Sosyal Medya Linkleri).
+* **EventListings:** Kullanıcı ilanları. `EventListingItems` tablosu ile bire-çok ilişkiye sahiptir (Örn: Bir ilanda hem Fotoğrafçı hem Pastane olabilir).
+* **Bids:** Verilen teklifler. `BidItems` ile hangi hizmete ne kadar fiyat verildiği tutulur.
+* **Reviews & Ratings:** Mekan puanlama ve yorumlama sistemi.
+
+---
+
+## 💻 Kurulum ve Çalıştırma
+
+Proje Docker ile çalışmaya hazırdır. Aşağıdaki adımları takip ederek projeyi yerel ortamınızda ayağa kaldırabilirsiniz.
 
 ### Gereksinimler
+- Docker Desktop & Docker Compose
+- Flutter SDK 3.0+
+- .NET SDK 8.0 (Backend için)
 
-- Docker ve Docker Compose
-- Flutter SDK 3.x (mobil uygulama icin)
-- Android Studio veya VS Code
+### Adımlar
 
-### Backend Servisleri
+1. **Repoyu Klonlayın:**
+   ```bash
+   git clone https://github.com/hsyntinaztepe/mekanbudur-mobile.git
+   cd mekanbudur-mobile
+   ```
 
-1. Projeyi klonlayin:
-```bash
-git clone https://github.com/hsyntinaztepe/mekanbudur-event-venue-finder.git.mobile.git
-cd mekanbudur-event-venue-finder.git.mobile
-```
+2. **Docker ile Backend'i Ayağa Kaldırın:** Proje dizininde terminali açın ve şu komutu çalıştırın:
+   ```bash
+   docker-compose up --build
+   ```
+Bu işlem Veritabanı, Main API ve Geo Service konteynerlerini yapılandırıp başlatacaktır.
 
-2. Docker ile servisleri baslatin:
-```bash
-docker compose up --build
-```
+3. **Flutter Bağımlılıklarını Yükleyin:**
+   ```bash
+   flutter pub get
+   ```
 
-3. Servislerin hazir olmasini bekleyin (ilk baslatmada 1-2 dakika surebilir).
+4. **Mobil Uygulamayı Çalıştırın:**
+   ```bash
+   flutter run
+   ```
 
-### Mobil Uygulama
+5. **Backend Erişim:**
+- Swagger API Dokümantasyonu: http://localhost:8081/swagger
 
-1. Flutter bagimliliklerini yukleyin:
-```bash
-cd src/mobile
-flutter pub get
-```
+## 📱 Kullanım Senaryoları
 
-2. Uygulamayi calistirin:
-```bash
-flutter run
-```
+**Bir Etkinlik Sahibi Olarak (User):**
 
-Not: Android emulatorunde API'ye baglanmak icin `api_client.dart` dosyasindaki base URL `http://10.0.2.2:8084/api` olarak ayarlidir.
+1-Sisteme kayıt olun ve giriş yapın.
 
-## Servis Adresleri
+2-"İlan Oluştur" butonuna tıklayın.
 
-| Servis | Adres | Aciklama |
-|--------|-------|----------|
-| API | http://localhost:8084 | Ana API servisi |
-| API Swagger | http://localhost:8084/swagger | API dokumantasyonu |
-| Geo API | http://localhost:8083 | Konum servisi |
-| pgAdmin | http://localhost:5051 | Veritabani yonetimi |
-| PostgreSQL (Ana) | localhost:5434 | Ana veritabani |
-| PostgreSQL (Geo) | localhost:5436 | Geo veritabani |
+3-Haritadan etkinlik konumunu seçin, tarihi girin.
 
-## Demo Hesaplar
+4-İhtiyaçlarınızı (örn: Düğün Salonu - 50.000 TL, Fotoğrafçı - 5.000 TL) ekleyip ilanı yayınlayın.
 
-Proje ilk baslatildiginda otomatik olarak demo hesaplar olusturulur:
+5-Gelen teklifleri "Tekliflerim" sayfasından yönetin ve en uygununu onaylayın.
 
-| Rol | E-posta | Sifre |
-|-----|---------|-------|
-| Kullanici | user@demo.com | Pass123* |
-| Tedarikci | vendor@demo.com | Pass123* |
+**Bir Hizmet Sağlayıcı Olarak (Vendor):**
 
-## API Endpoint'leri
+1-"Kurumsal Kayıt" ile işletmenizi kaydedin (Hizmet kategorilerinizi seçin).
 
-### Kimlik Dogrulama
-- `POST /api/auth/register` - Yeni kullanici kaydi
-- `POST /api/auth/login` - Kullanici girisi
+2-"Kurumsal Panel" üzerinden profilinizi düzenleyin (Fotoğraf yükleyin, açıklama girin).
 
-### Kategoriler
-- `GET /api/categories` - Hizmet kategorilerini listele
+3-"Pazar Alanı"na giderek açık ilanları listeleyin.
 
-### Ilanlar
-- `GET /api/listings` - Tum ilanlari listele
-- `GET /api/listings/{id}` - Ilan detayi
-- `GET /api/listings/mine` - Kullanicinin kendi ilanlari (Auth: User)
-- `POST /api/listings` - Yeni ilan olustur (Auth: User)
-- `PATCH /api/listings/{id}/visibility` - Ilan gorunurlugunu guncelle
+4-Hizmet verebileceğiniz ilanlara fiyat teklifi gönderin.
 
-### Teklifler
-- `POST /api/bids` - Teklif ver (Auth: Vendor)
-- `GET /api/bids/mine` - Tedarikci teklifleri (Auth: Vendor)
-- `GET /api/listings/{id}/bids` - Ilana gelen teklifler (Auth: Ilan sahibi)
-- `POST /api/bids/{id}/accept` - Teklif kabul et (Auth: User)
+## 👨‍💻 Geliştirici
 
-### Konum (Geo)
-- `POST /api/places/upsert` - Konum ekle/guncelle
-- `GET /api/places/by-ref` - Referansa gore konum getir
-
-## Veritabani Yapisi
-
-### Ana Veritabani (evently)
-
-**Users**
-- Id, Email, PasswordHash, DisplayName, Role (User/Vendor)
-
-**VendorProfiles**
-- Id, UserId, CompanyName, ServiceCategoriesCsv
-
-**ServiceCategories**
-- Id, Name
-
-**EventListings**
-- Id, Title, Description, EventDate, Location, Status, Visibility, CreatedByUserId
-
-**EventListingItems**
-- Id, EventListingId, ServiceCategoryId, Budget, Status
-
-**Bids**
-- Id, EventListingId, VendorId, TotalAmount, Message, Status
-
-**BidItems**
-- Id, BidId, EventListingItemId, Amount
-
-### Geo Veritabani (evently_geo)
-
-**Places**
-- Id, RefType (Listing/Vendor), RefId, Latitude, Longitude, Radius, AddressLabel
-
-## Ozellikler
-
-### Kullanici Ozellikleri
-- Kayit olma ve giris yapma
-- Etkinlik ilani olusturma (harita uzerinden konum secimi)
-- Ilan gorunurluk yonetimi (yayinla/gizle/kaldir)
-- Gelen teklifleri inceleme ve kabul etme
-
-### Tedarikci Ozellikleri
-- Tedarikci olarak kayit olma
-- Acik ilanlari goruntuleme (Pazar Alani)
-- Ilanlara teklif verme
-- Kendi tekliflerini takip etme
-- Profil yonetimi
-
-### Harita Entegrasyonu
-- Ilan olustururken haritadan konum secimi
-- Kapsam yaricapi belirleme
-- Ilan detaylarinda harita gorunumu
-
-## Gelistirme
-
-### Kod Yapilandirmasi
-
-Backend servisleri .NET 8 Minimal API kullanir. Tum endpoint'ler `Program.cs` dosyalarinda tanimlidir.
-
-Flutter uygulamasi Provider pattern ile state yonetimi yapar. Ekranlar `presentation/screens` altinda, API servisleri `data/services` altindadir.
-
-### Veritabani
-
-Entity Framework Core Code First yaklasimi kullanilir. Ilk calistirmada `EnsureCreated()` ile sema olusturulur.
-
-### Docker
-
-Tum servisler Docker container'larinda calisir. `docker-compose.yml` dosyasi servis bagimliliklerini ve health check'leri tanimlar.
-
-## pgAdmin Kullanimi
-
-pgAdmin'e http://localhost:5050 adresinden erisin.
-
-Giris bilgileri:
-- E-posta: admin@mekanbudur.com
-- Sifre: admin
-
-Veritabani baglantisi icin:
-- Host: db (ana) veya geodb (geo)
-- Port: 5432
-- Kullanici: postgres
-- Sifre: postgres
-
-## Lisans
-
-Bu proje egitim amacli gelistirilmistir.
+**Hüseyin Tınaztepe**
