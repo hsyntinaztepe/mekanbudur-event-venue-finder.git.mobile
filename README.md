@@ -1,6 +1,6 @@
 # MekanBudur Mobile - Özel Etkinlik Pazar Yeri Mobil Uygulaması
 
-![MekanBudur Mobile](template_mobile.png)
+![MekanBudur Mobile](template.png)
 
 ![Project Status](https://img.shields.io/badge/status-active-success.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
